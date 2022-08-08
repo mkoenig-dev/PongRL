@@ -3,6 +3,8 @@ from pong.environment import Environment, Field, Player, Ball, Action, state2vec
 from pong.agent import UserAgent, DQNAgent, DQN
 import tensorflow as tf
 import numpy as np
+import os
+os.environ["SDL_VIDEODRIVER"] = "x11"
 
 pygame.init()
 
@@ -43,7 +45,7 @@ user_agent = UserAgent()
 try:
     dqn1 = tf.keras.models.load_model("models/target1")
     dqn2 = tf.keras.models.load_model("models/target2")
-except FileNotFoundError:
+except OSError:
     dqn1 = DQN()
     dqn2 = DQN()
 

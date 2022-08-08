@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from enum import Enum
 from dataclasses import dataclass
@@ -40,10 +41,16 @@ class Ball:
         self.hit = False
         self.wall_hit = False
 
-        vel = np.array(np.random.rand(2))
-        vel_norm = np.linalg.norm(vel)
+        theta = 0.5 * np.random.rand(1) * np.pi - np.pi * 0.25
 
-        self.vel = vel / vel_norm
+        vel = np.array(
+            np.cos(theta),
+            np.sin(theta)
+        )
+        
+        sign = random.choice((-1.0, 1.0))
+
+        self.vel = sign * vel
 
     def mirror_x(self):
         if not self.hit:
