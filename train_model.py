@@ -121,8 +121,8 @@ def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
             ).reshape(batch_size, -1)
 
             # Gather rewards from transitions
-            reward_batch1 = np.array(list(map(attrgetter("value"), batch.reward1)), dtype="float32")
-            reward_batch2 = np.array(list(map(attrgetter("value"), batch.reward2)), dtype="float32")
+            reward_batch1 = np.array(batch.reward1, dtype="float32")
+            reward_batch2 = np.array(batch.reward2, dtype="float32")
 
             # Update step for both agents
             train_step(policy1, target1, loss1, optimizer1, state_batch1, action_indices1, reward_batch1, gamma)

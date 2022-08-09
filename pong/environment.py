@@ -21,8 +21,8 @@ actions = [Action.DOWN, Action.STILL, Action.UP]
 
 
 class Reward(Enum):
-    SCORED = 100
-    HIT = 50
+    SCORED = 10
+    HIT = 100
     PLAYING = 1
     RECEIVED = -1000
 
@@ -34,22 +34,23 @@ class Ball:
     radius = 2.0
     hit = False
     wall_hit = False
+    last_touch = -1
 
     def reset(self, x, y):
         self.pos[0] = x
         self.pos[1] = y
         self.hit = False
         self.wall_hit = False
+        self.last_touch = -1
 
-        theta = 0.5 * np.random.rand(1) * np.pi - np.pi * 0.25
+        theta = 0.5 * np.random.rand(1)[0] * np.pi - np.pi * 0.25
 
-        vel = np.array(
+        vel = np.array([
             np.cos(theta),
             np.sin(theta)
-        )
+        ])
         
         sign = random.choice((-1.0, 1.0))
-
         self.vel = sign * vel
 
     def mirror_x(self):
@@ -226,8 +227,12 @@ class Environment:
 
     def handle_collisions(self):
         # TODO: Clean up later
-        if self.p1.hit_ball(self.ball) or self.p2.hit_ball(self.ball):
+        if self.p1.hit_ball(self.ball):
             self.ball.mirror_x()
+            self.ball.last_touch = 1
+        elif self.p2.hit_ball(self.ball):
+            self.ball.mirror_x()
+            self.ball.last_touch = 2
         else:
             self.ball.hit = False
 
@@ -268,18 +273,21 @@ class Environment:
         return game_state
 
     def rewards(self, game_state: GameState):
+        r1, r2 = Reward.PLAYING.value, Reward.PLAYING.value
         if game_state == GameState.SCORED:
-            r1, r2 = Reward.SCORED, Reward.RECEIVED
+            r2 += Reward.RECEIVED.value
+            if self.ball.last_touch == 1:
+                r1 += Reward.SCORED.value
         elif game_state == GameState.RECEIVED:
-            r1, r2 = Reward.RECEIVED, Reward.SCORED
-        else:
-            r1, r2 = Reward.PLAYING, Reward.PLAYING
+            r1 += Reward.RECEIVED.value
+            if self.ball.last_touch == 2:
+                r2 += Reward.SCORED.value
 
         if self.p1.hit:
-            r1 += r1.HIT
+            r1 += Reward.HIT.value
 
         if self.p2.hit:
-            r2 += r2.HIT
+            r2 += Reward.HIT.value
 
         return r1, r2
 
