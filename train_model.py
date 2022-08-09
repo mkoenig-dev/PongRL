@@ -111,6 +111,8 @@ def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
             reward_batch1 = np.array(batch.reward1, dtype="float32")
             reward_batch2 = np.array(batch.reward2, dtype="float32")
 
+            terminal_batch = np.array(batch.terminal, dtype="int32")
+
             # Update step for both agents
             agent1.optimize(loss1, optimizer1, state_batch1, action_indices1, new_state_batch1, reward_batch1, gamma)
             agent2.optimize(loss2, optimizer2, state_batch2, action_indices2, new_state_batch2, reward_batch2, gamma)

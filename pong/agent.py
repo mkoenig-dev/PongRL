@@ -51,7 +51,8 @@ class DDQN(Agent):
         self.target_dqn = target_dqn
 
     @tf.function
-    def optimize(self, loss, optimizer, state_batch, action_indices, new_state_batch, reward_batch, gamma):
+    def optimize(self, loss, optimizer, state_batch,
+                 action_indices, new_state_batch, reward_batch, terminal_batch, gamma):
         with tf.GradientTape() as tape:
             # Calculate target Q value for chosen actions
             q_values = tf.gather(
@@ -68,7 +69,7 @@ class DDQN(Agent):
                 best_next_actions,
                 axis=1
             )
-            target_q = reward_batch + gamma * inter_q_values
+            target_q = reward_batch + (gamma * inter_q_values * terminal_batch)
 
             # Calculate Huber loss
             loss_value = loss(q_values, target_q)
@@ -91,7 +92,7 @@ class DDQN(Agent):
     def update_target(self):
         self.target_dqn.set_weights(self.dqn.get_weights())
 
-    def save(self, path):
+    def save(self, path: str):
         path = Path(path)
 
         if not path.exists():
@@ -103,12 +104,12 @@ class DDQN(Agent):
         except Exception:
             raise RuntimeError(f"Could not save model to {path}")
 
-    def load(path):
-        path = Path(path)
-        dqn_path = path / "dqn"
-        target_path = path / "target"
+    def load(path: str):
+        load_path = Path(path)
+        dqn_path = load_path / "dqn"
+        target_path = load_path / "target"
         
-        if path.exists() and dqn_path.exists() and target_path.exists():
+        if load_path.exists() and dqn_path.exists() and target_path.exists():
             try:
                 dqn = tf.keras.models.load_model(dqn_path)
                 target = tf.keras.models.load_model(target_path)

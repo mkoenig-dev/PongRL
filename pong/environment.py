@@ -8,7 +8,7 @@ from collections import namedtuple
 State = namedtuple("State",
                    ("agent", "opponent", "ball_pos", "ball_dir"))
 Transition = namedtuple("Transition",
-                        ("state", "action1", "action2", "new_state", "reward1", "reward2"))
+                        ("state", "action1", "action2", "new_state", "reward1", "reward2", "terminal"))
 
 
 class Action(Enum):
@@ -21,7 +21,7 @@ actions = [Action.DOWN, Action.STILL, Action.UP]
 
 
 class Reward(Enum):
-    SCORED = 10
+    SCORED = 1000
     HIT = 100
     PLAYING = 1
     RECEIVED = -1000
@@ -337,5 +337,6 @@ class Environment:
             action2,
             self.observe(),
             reward1,
-            reward2
+            reward2,
+            game_state != GameState.PLAYING
         )

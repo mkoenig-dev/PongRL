@@ -48,6 +48,16 @@ except OSError:
     ai_agent2 = DQNAgent(DQN())
 
 action = Action.STILL
+steps = 0
+
+
+def flip_input(inputs):
+    inputs[2] = field.width - inputs[2]
+    inputs[4] = -inputs[4]
+    inputs[5] = -inputs[5]
+
+    return inputs
+
 
 while not game_over:
     for event in pygame.event.get():
@@ -60,8 +70,12 @@ while not game_over:
     current_state = env.observe()
     input_tensor1 = np.expand_dims(state2vec(current_state), axis=0)
     input_tensor2 = np.expand_dims(state2vec(current_state, target="opponent"), axis=0)
+    # input_tensor2 = flip_input(state2vec(current_state, target="opponent"))
+    # input_tensor2 = np.expand_dims(input_tensor2, axis = 0)
 
-    env.act(ai_agent1.select_action(input_tensor1), ai_agent2.select_action(input_tensor2))
+    action = ai_agent1.select_action(input_tensor1)
+
+    env.act(action, ai_agent2.select_action(input_tensor2))
     draw_player(env.p1, m2p)
     draw_player(env.p2, m2p)
     draw_ball(env.ball, m2p)
@@ -69,6 +83,10 @@ while not game_over:
     pygame.display.update()
 
     clock.tick(60)
+    steps += 1
+
+    if steps % 1000 == 0:
+        print(steps)
 
 pygame.quit()
 quit()
