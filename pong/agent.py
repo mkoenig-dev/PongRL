@@ -1,6 +1,6 @@
 import random
 
-from tensorflow.keras.layers import Dense, InputLayer
+from tensorflow.keras.layers import Dense
 import tensorflow as tf
 from abc import ABC, abstractmethod
 from .environment import Action, actions
@@ -94,10 +94,14 @@ class DDQN(Agent):
     def save(self, path):
         path = Path(path)
 
-        if path.exists():
+        if not path.exists():
+            path.mkdir()
 
+        try:
             self.dqn.save(path / "dqn")
             self.target_dqn.save(path / "target")
+        except Exception:
+            raise RuntimeError(f"Could not save model to {path}")
 
     def load(path):
         path = Path(path)
