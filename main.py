@@ -1,6 +1,6 @@
 import pygame
 from pong.environment import Environment, Field, Player, Ball, Action, state2vec
-from pong.agent import UserAgent, DQNAgent, DQN
+from pong.agent import DQN, DQNAgent, UserAgent, DDQN
 import tensorflow as tf
 import numpy as np
 
@@ -41,14 +41,12 @@ clock = pygame.time.Clock()
 
 user_agent = UserAgent()
 try:
-    dqn1 = tf.keras.models.load_model("models/target1")
-    dqn2 = tf.keras.models.load_model("models/target2")
+    ai_agent1 = DDQN.load("models/ddqn1")
+    ai_agent2 = DDQN.load("models/ddqn2")
 except OSError:
-    dqn1 = DQN()
-    dqn2 = DQN()
+    ai_agent1 = DQNAgent(DQN())
+    ai_agent2 = DQNAgent(DQN())
 
-ai_agent1 = DQNAgent(dqn1)
-ai_agent2 = DQNAgent(dqn2)
 action = Action.STILL
 
 while not game_over:

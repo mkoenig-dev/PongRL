@@ -1,7 +1,7 @@
 import random
 from collections import deque
 from pong.environment import Environment, Transition, Field, state2vec
-from pong.agent import DQN, DQNAgent
+from pong.agent import DQN, DDQN
 from tqdm import trange
 import numpy as np
 import tensorflow as tf
@@ -24,28 +24,6 @@ class ReplayBuffer(object):
         return len(self.memory)
 
 
-def train_step(policy, target, loss, optimizer, state_batch, action_indices, reward_batch, gamma):
-    with tf.GradientTape() as tape:
-        # Calculate target Q value for chosen actions
-        policy_q_value = tf.gather(
-            policy(state_batch),
-            action_indices,
-            axis=1
-        )
-
-        # Calculate policy q value based on max Q
-        next_action_values = reward_batch + gamma * tf.reduce_max(target(state_batch), axis=1)
-
-        # Calculate Huber loss
-        loss_value = loss(policy_q_value, next_action_values)
-
-    # Get gradients w.r.t. weights
-    grads = tape.gradient(loss_value, policy.trainable_variables)
-
-    # Update policy network
-    optimizer.apply_gradients(zip(grads, policy.trainable_variables))
-
-
 def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
     buffer = ReplayBuffer(mem_size)
 
@@ -63,8 +41,8 @@ def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
     target2.build((None, 6))
     target2.set_weights(policy2.get_weights())
 
-    agent1 = DQNAgent(policy1)
-    agent2 = DQNAgent(policy2)
+    agent1 = DDQN(policy1, target1)
+    agent2 = DDQN(policy2, target2)
 
     env = Environment(Field())
 
@@ -120,24 +98,29 @@ def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
                 list(map(partial(state2vec, target="opponent"), batch.state))
             ).reshape(batch_size, -1)
 
+            # next states
+            new_state_batch1 = np.array(
+                list(map(state2vec, batch.new_state))
+            ).reshape(batch_size, -1)
+
+            new_state_batch2 = np.array(
+                list(map(partial(state2vec, target="opponent"), batch.new_state))
+            ).reshape(batch_size, -1)
+
             # Gather rewards from transitions
             reward_batch1 = np.array(batch.reward1, dtype="float32")
             reward_batch2 = np.array(batch.reward2, dtype="float32")
 
             # Update step for both agents
-            train_step(policy1, target1, loss1, optimizer1, state_batch1, action_indices1, reward_batch1, gamma)
-            train_step(policy2, target2, loss2, optimizer2, state_batch2, action_indices2, reward_batch2, gamma)
+            agent1.optimize(loss1, optimizer1, state_batch1, action_indices1, new_state_batch1, reward_batch1, gamma)
+            agent2.optimize(loss2, optimizer2, state_batch2, action_indices2, new_state_batch2, reward_batch2, gamma)
 
         # Update target Q network and save models
+        agent1.update_target()
+        agent2.update_target()
 
-        target1.set_weights(policy1.get_weights())
-        agent1.actor = policy1
-
-        target2.set_weights(policy2.get_weights())
-        agent2.actor = policy2
-
-        target1.save("models/target1")
-        target2.save("models/target2")
+        agent1.save("models/ddqn1")
+        agent2.save("models/ddqn2")
 
 
 if __name__ == "__main__":
