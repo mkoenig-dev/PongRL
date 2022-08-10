@@ -1,12 +1,14 @@
 import random
 from collections import deque
-from pong.environment import Environment, Transition, Field, state2vec
-from pong.agent import DQN, DDQN
-from tqdm import trange
-import numpy as np
-import tensorflow as tf
 from functools import partial
 from operator import attrgetter
+
+import numpy as np
+import tensorflow as tf
+from tqdm import trange
+
+from pong.agent import DDQN, DQN
+from pong.environment import Batch, Environment, Field, Transition, state2vec
 
 
 class ReplayBuffer(object):
@@ -24,7 +26,33 @@ class ReplayBuffer(object):
         return len(self.memory)
 
 
-def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
+def repack_batch(batch, batch_size, target=0):
+    # target = 0: player 1
+    # target = 1: player 2
+
+    # values of action enum items go from -1 to 1, hence +1 for the index
+    action_batch = batch.action1 if target == 0 else batch.action2
+    action_indices = np.array(list(map(attrgetter("value"), action_batch))) + 1
+
+    # Gather states from batch
+    state_batch = np.array(
+        list(map(partial(state2vec, target=target), batch.state))
+    ).reshape(batch_size, -1)
+
+    new_state_batch = np.array(
+        list(map(partial(state2vec, target=target), batch.new_state))
+    ).reshape(batch_size, -1)
+
+    reward_batch = batch.reward1 if target == 0 else batch.reward2
+    reward_batch = np.array(reward_batch, dtype="float32")
+    terminal_batch = np.array(batch.terminal, dtype="float32")
+
+    return Batch(
+        state_batch, action_indices, new_state_batch, reward_batch, terminal_batch
+    )
+
+
+def train_dqn(episodes, batch_size, gamma, num_updates, num_freezes, mem_size=2000):
     buffer = ReplayBuffer(mem_size)
 
     # Define actors per player
@@ -55,80 +83,63 @@ def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
 
     # Random exploration
     eps_start = 0.3
-    eps_end = 0.99
+    eps_end = 0.9
 
-    for e in trange(episodes, desc="episode"):
+    with trange(episodes, desc="episode") as t:
+        for e in t:
 
-        # get epsilon greedy value
-        eps = (eps_end - eps_start) * ((e+1) / episodes) + eps_start
+            # get epsilon greedy value
+            eps = (eps_end - eps_start) * ((e + 1) / episodes) + eps_start
 
-        # Fill buffer with transition pairs
-        for _ in trange(mem_size, desc="explore"):
-            current_state = env.observe()
+            cumulated_reward = 0
 
-            action1 = agent1.select_action(
-                np.expand_dims(state2vec(current_state, target="agent"), axis=0),
-                eps=eps
-            )
-            action2 = agent2.select_action(
-                np.expand_dims(state2vec(current_state, target="opponent"), axis=0),
-                eps=eps
-            )
+            # Fill buffer with transition pairs
+            for _ in trange(mem_size, desc="explore"):
+                current_state = env.observe()
 
-            transition = env.act(action1, action2)
-            buffer.push(*transition)
+                action1 = agent1.select_action(
+                    state2vec(current_state, target=0)[np.newaxis], eps=eps
+                )
+                action2 = agent2.select_action(
+                    state2vec(current_state, target=1)[np.newaxis], eps=eps
+                )
 
-        # Loop over batches
-        for _ in trange(num_freezes, desc="steps"):
+                transition = env.act(action1, action2)
 
-            # Start training here
-            transitions = buffer.sample(batch_size)
-            batch = Transition(*zip(*transitions))
+                cumulated_reward += transition.reward1 + transition.reward2
 
-            # Gather action indices from transitions
-            action_indices1 = np.array(list(map(attrgetter("value"), batch.action1))) + 1
-            action_indices2 = np.array(list(map(attrgetter("value"), batch.action2))) + 1
+                buffer.push(*transition)
 
-            # Gather states from transitions
-            state_batch1 = np.array(
-                list(map(state2vec, batch.state))
-            ).reshape(batch_size, -1)
+            t.set_postfix(total_reward=cumulated_reward)
 
-            state_batch2 = np.array(
-                list(map(partial(state2vec, target="opponent"), batch.state))
-            ).reshape(batch_size, -1)
+            # Loop over batches
+            for _ in trange(num_updates, desc="steps"):
 
-            # next states
-            new_state_batch1 = np.array(
-                list(map(state2vec, batch.new_state))
-            ).reshape(batch_size, -1)
+                # Start training here
+                transitions = buffer.sample(batch_size)
+                raw_batch = Transition(*zip(*transitions))
 
-            new_state_batch2 = np.array(
-                list(map(partial(state2vec, target="opponent"), batch.new_state))
-            ).reshape(batch_size, -1)
+                batch1 = repack_batch(raw_batch, batch_size, target=0)
+                batch2 = repack_batch(raw_batch, batch_size, target=1)
 
-            # Gather rewards from transitions
-            reward_batch1 = np.array(batch.reward1, dtype="float32")
-            reward_batch2 = np.array(batch.reward2, dtype="float32")
+                # Update step for both agents
+                agent1.optimize(loss1, optimizer1, batch1, gamma)
+                agent2.optimize(loss2, optimizer2, batch2, gamma)
 
-            terminal_batch = np.array(batch.terminal, dtype="int32")
+            # Update target Q network and save models every num_freezes epochs
+            if e % num_freezes == 0:
+                agent1.update_target()
+                agent2.update_target()
 
-            # Update step for both agents
-            agent1.optimize(loss1, optimizer1, state_batch1, action_indices1, new_state_batch1, reward_batch1, gamma)
-            agent2.optimize(loss2, optimizer2, state_batch2, action_indices2, new_state_batch2, reward_batch2, gamma)
-
-        # Update target Q network and save models
-        agent1.update_target()
-        agent2.update_target()
-
-        agent1.save("models/ddqn1")
-        agent2.save("models/ddqn2")
+            agent1.save("models/ddqn1_new")
+            agent2.save("models/ddqn2_new")
 
 
 if __name__ == "__main__":
     episodes = 1000
-    batch_size = 1000
-    num_freezes = 100
+    batch_size = 500
+    num_updates = 200
+    num_freezes = 10
     gamma = 0.999
 
-    train_dqn(episodes, batch_size, gamma, num_freezes)
+    train_dqn(episodes, batch_size, gamma, num_updates, num_freezes, mem_size=10000)

@@ -1,12 +1,13 @@
 import random
-
-from tensorflow.keras.layers import Dense
-import tensorflow as tf
 from abc import ABC, abstractmethod
-from .environment import Action, actions
+from pathlib import Path
+
 import numpy as np
 import pygame
-from pathlib import Path
+import tensorflow as tf
+from tensorflow.keras.layers import Dense
+
+from .environment import Action, actions
 
 
 class DQN(tf.keras.Model):
@@ -14,8 +15,8 @@ class DQN(tf.keras.Model):
         super(DQN, self).__init__()
         self.x1 = Dense(32, activation="relu")
         self.x2 = Dense(64, activation="relu")
-        self.x2 = Dense(32, activation="relu")
-        self.x3 = Dense(3, activation="relu")
+        self.x2 = Dense(128, activation="relu")
+        self.x3 = Dense(3, activation="softmax")
 
     def call(self, x):
         x = self.x1(x)
@@ -50,26 +51,24 @@ class DDQN(Agent):
         self.dqn = dqn
         self.target_dqn = target_dqn
 
-    @tf.function
-    def optimize(self, loss, optimizer, state_batch,
-                 action_indices, new_state_batch, reward_batch, terminal_batch, gamma):
+    def optimize(self, loss, optimizer, batch, gamma):
+
+        # Unpack batch
+        states = batch.states
+        action_indices = batch.actions_indices
+        new_states = batch.new_states
+        rewards = batch.rewards
+        terminal = batch.terminal
+
         with tf.GradientTape() as tape:
             # Calculate target Q value for chosen actions
-            q_values = tf.gather(
-                self.dqn(state_batch),
-                action_indices,
-                axis=1
-            )
+            q_values = tf.gather(self.dqn(states), action_indices, axis=1)
 
             # Calculate policy q value based on max Q
-            best_next_actions = tf.argmax(self.dqn(new_state_batch), axis=1)
-            next_target_q_vals = self.target_dqn(new_state_batch)
-            inter_q_values = tf.gather(
-                next_target_q_vals,
-                best_next_actions,
-                axis=1
-            )
-            target_q = reward_batch + (gamma * inter_q_values * terminal_batch)
+            best_next_actions = tf.argmax(self.dqn(new_states), axis=1)
+            next_target_q_vals = self.target_dqn(new_states)
+            inter_q_values = tf.gather(next_target_q_vals, best_next_actions, axis=1)
+            target_q = rewards + (gamma * inter_q_values * (1.0 - terminal))
 
             # Calculate Huber loss
             loss_value = loss(q_values, target_q)
@@ -108,7 +107,7 @@ class DDQN(Agent):
         load_path = Path(path)
         dqn_path = load_path / "dqn"
         target_path = load_path / "target"
-        
+
         if load_path.exists() and dqn_path.exists() and target_path.exists():
             try:
                 dqn = tf.keras.models.load_model(dqn_path)

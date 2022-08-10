@@ -1,8 +1,8 @@
-import pygame
-from pong.environment import Environment, Field, Player, Ball, Action, state2vec
-from pong.agent import DQN, DQNAgent, UserAgent, DDQN
-import tensorflow as tf
 import numpy as np
+import pygame
+
+from pong.agent import DDQN, DQN, DQNAgent, UserAgent
+from pong.environment import Action, Ball, Environment, Field, Player, state2vec
 
 pygame.init()
 
@@ -28,7 +28,7 @@ def draw_ball(ball: Ball, upscale=1.0):
 WIDTH = 800
 HEIGHT = 400
 dis = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption('Pong by Kinguuu')
+pygame.display.set_caption("Pong by Kinguuu")
 
 game_over = False
 input_shape = 4
@@ -68,8 +68,8 @@ while not game_over:
     dis.fill(white)
     # Transform state tuple to input tensor
     current_state = env.observe()
-    input_tensor1 = np.expand_dims(state2vec(current_state), axis=0)
-    input_tensor2 = np.expand_dims(state2vec(current_state, target="opponent"), axis=0)
+    input_tensor1 = state2vec(current_state, target=0)[np.newaxis]
+    input_tensor2 = state2vec(current_state, target=1)[np.newaxis]
     # input_tensor2 = flip_input(state2vec(current_state, target="opponent"))
     # input_tensor2 = np.expand_dims(input_tensor2, axis = 0)
 

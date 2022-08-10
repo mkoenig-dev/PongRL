@@ -1,14 +1,20 @@
 import random
-import numpy as np
-from enum import Enum
-from dataclasses import dataclass
-from typing import Any, Dict, Tuple
 from collections import namedtuple
+from dataclasses import dataclass
+from enum import Enum
+from typing import Tuple
 
-State = namedtuple("State",
-                   ("agent", "opponent", "ball_pos", "ball_dir"))
-Transition = namedtuple("Transition",
-                        ("state", "action1", "action2", "new_state", "reward1", "reward2", "terminal"))
+import numpy as np
+
+State = namedtuple("State", ("agent", "opponent", "ball_pos", "ball_dir"))
+Transition = namedtuple(
+    "Transition",
+    ("state", "action1", "action2", "new_state", "reward1", "reward2", "terminal"),
+)
+
+Batch = namedtuple(
+    "Batch", ("states", "actions_indices", "new_states", "rewards", "terminal")
+)
 
 
 class Action(Enum):
@@ -21,10 +27,10 @@ actions = [Action.DOWN, Action.STILL, Action.UP]
 
 
 class Reward(Enum):
-    SCORED = 1000
-    HIT = 100
-    PLAYING = 1
-    RECEIVED = -1000
+    SCORED = 10
+    HIT = 2
+    PLAYING = 0
+    RECEIVED = -10
 
 
 @dataclass
@@ -45,11 +51,8 @@ class Ball:
 
         theta = 0.5 * np.random.rand(1)[0] * np.pi - np.pi * 0.25
 
-        vel = np.array([
-            np.cos(theta),
-            np.sin(theta)
-        ])
-        
+        vel = np.array([np.cos(theta), np.sin(theta)])
+
         sign = random.choice((-1.0, 1.0))
         self.vel = sign * vel
 
@@ -95,8 +98,10 @@ class Field:
     speed = 3.0
 
     def out_of_bounds(self, player: Player):
-        return player.height + player.pos_y >= self.origin + self.height or \
-               player.pos_y <= self.origin
+        return (
+            player.height + player.pos_y >= self.origin + self.height
+            or player.pos_y <= self.origin
+        )
 
     def wall_hit(self, ball: Ball):
         return not (self.origin[1] < ball.pos[1] < self.origin[1] + self.height)
@@ -107,8 +112,9 @@ def point_in_rectangle(point: np.ndarray, player: Player):
     vec_ab = np.array([player.width, 0])
     vec_ad = np.array([player.width, player.height])
 
-    return 0 <= vec_ap.dot(vec_ab) <= vec_ab.dot(vec_ab) and \
-           0 <= vec_ap.dot(vec_ad) <= vec_ad.dot(vec_ad)
+    return 0 <= vec_ap.dot(vec_ab) <= vec_ab.dot(vec_ab) and 0 <= vec_ap.dot(
+        vec_ad
+    ) <= vec_ad.dot(vec_ad)
 
 
 def calc_perpend(norm, center, point):
@@ -130,56 +136,34 @@ def distance(vec1, vec2):
 
 def intersect_disc(ball: Ball, line: Tuple[np.ndarray, np.ndarray]):
     vec = line[1] - line[0]
-    norm = np.array([
-        -vec[1],
-        vec[0]
-    ])
+    norm = np.array([-vec[1], vec[0]])
     perp, dist = calc_perpend(norm, line[0], ball.pos)
 
-    return dist <= ball.radius and \
-           distance(perp, line[0]) + distance(perp, line[1]) == distance(line[0], line[1])
+    return dist <= ball.radius and distance(perp, line[0]) + distance(
+        perp, line[1]
+    ) == distance(line[0], line[1])
 
 
 def intersect(ball: Ball, player: Player):
-    p_bl = np.array([
-        player.pos_x,
-        player.pos_y
-    ])
-    p_br = np.array([
-        player.pos_x + player.width,
-        player.pos_y
-    ])
-    p_tl = np.array([
-        player.pos_x,
-        player.pos_y + player.height
-    ])
-    p_tr = np.array([
-        player.pos_x + player.width,
-        player.pos_y + player.height
-    ])
+    p_bl = np.array([player.pos_x, player.pos_y])
+    p_br = np.array([player.pos_x + player.width, player.pos_y])
+    p_tl = np.array([player.pos_x, player.pos_y + player.height])
+    p_tr = np.array([player.pos_x + player.width, player.pos_y + player.height])
 
-    return (point_in_rectangle(ball.pos, player)) or \
-           intersect_disc(ball, (p_bl, p_br)) or \
-           intersect_disc(ball, (p_bl, p_tl)) or \
-           intersect_disc(ball, (p_br, p_tr)) or \
-           intersect_disc(ball, (p_tl, p_tr))
+    return (
+        (point_in_rectangle(ball.pos, player))
+        or intersect_disc(ball, (p_bl, p_br))
+        or intersect_disc(ball, (p_bl, p_tl))
+        or intersect_disc(ball, (p_br, p_tr))
+        or intersect_disc(ball, (p_tl, p_tr))
+    )
 
 
-def state2vec(state, target="agent") -> np.ndarray:
-    if target == "agent":
-        return np.array([
-            state.agent,
-            state.opponent,
-            *state.ball_pos,
-            *state.ball_dir
-        ])
-    elif target == "opponent":
-        return np.array([
-            state.opponent,
-            state.agent,
-            *state.ball_pos,
-            *state.ball_dir
-        ])
+def state2vec(state, target=0) -> np.ndarray:
+    if target == 0:
+        return np.array([state.agent, state.opponent, *state.ball_pos, *state.ball_dir])
+    elif target == 1:
+        return np.array([state.opponent, state.agent, *state.ball_pos, *state.ball_dir])
 
 
 class Environment:
@@ -195,15 +179,15 @@ class Environment:
     def reset(self):
         self.p1.reset(
             self.field.origin[0],
-            self.field.origin[1] + 0.5 * (self.field.height - self.p1.height)
+            self.field.origin[1] + 0.5 * (self.field.height - self.p1.height),
         )
         self.p2.reset(
             self.field.origin[0] + self.field.width - self.p2.width,
-            self.field.origin[1] + 0.5 * (self.field.height - self.p2.height)
+            self.field.origin[1] + 0.5 * (self.field.height - self.p2.height),
         )
         self.ball.reset(
             self.field.origin[0] + 0.5 * self.field.width,
-            self.field.origin[1] + 0.5 * self.field.height
+            self.field.origin[1] + 0.5 * self.field.height,
         )
 
     def restart(self):
@@ -252,7 +236,7 @@ class Environment:
             "score": np.zeros(2),
             "game_state": game_state,
             "reward1": reward1,
-            "reward2": reward2
+            "reward2": reward2,
         }
 
         if game_state == GameState.SCORED:
@@ -300,18 +284,16 @@ class Environment:
         # Clip players to field
         self.p1.pos_y = max(
             min(
-                self.field.origin[1] + self.field.height - self.p1.height,
-                self.p1.pos_y
+                self.field.origin[1] + self.field.height - self.p1.height, self.p1.pos_y
             ),
-            self.field.origin[1]
+            self.field.origin[1],
         )
 
         self.p2.pos_y = max(
             min(
-                self.field.origin[1] + self.field.height - self.p2.height,
-                self.p2.pos_y
+                self.field.origin[1] + self.field.height - self.p2.height, self.p2.pos_y
             ),
-            self.field.origin[1]
+            self.field.origin[1],
         )
 
         # Handle ball collisions
@@ -324,12 +306,12 @@ class Environment:
         game_state = self.new_gamestate()
         reward1, reward2 = self.rewards(game_state)
 
-        # Update environment state
-        self.update_state(game_state, reward1, reward2)
-
         # Reset game on score
         if game_state != GameState.PLAYING:
             self.reset()
+
+        # Update environment state
+        self.update_state(game_state, reward1, reward2)
 
         return Transition(
             self.observe(-2),
@@ -338,5 +320,5 @@ class Environment:
             self.observe(),
             reward1,
             reward2,
-            game_state != GameState.PLAYING
+            game_state != GameState.PLAYING,
         )

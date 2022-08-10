@@ -2,13 +2,12 @@
 
 """The setup script."""
 
-from setuptools import find_packages, setup
 import pkg_resources
+from setuptools import find_packages, setup
 
 with open("requirements.txt") as req_file:
     requirements = [
-        str(requirement)
-        for requirement in pkg_resources.parse_requirements(req_file)
+        str(requirement) for requirement in pkg_resources.parse_requirements(req_file)
     ]
 
 test_requirements = [
