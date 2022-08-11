@@ -52,7 +52,7 @@ def repack_batch(batch, batch_size, target=0):
     )
 
 
-def train_dqn(episodes, batch_size, gamma, num_updates, num_freezes, mem_size=2000):
+def train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000):
     buffer = ReplayBuffer(mem_size)
 
     # Define actors per player
@@ -93,29 +93,30 @@ def train_dqn(episodes, batch_size, gamma, num_updates, num_freezes, mem_size=20
 
             cumulated_reward = 0
 
-            # Fill buffer with transition pairs
-            for _ in trange(mem_size, desc="explore"):
-                current_state = env.observe()
+            # One new step
 
-                action1 = agent1.select_action(
-                    state2vec(current_state, target=0)[np.newaxis], eps=eps
-                )
-                action2 = agent2.select_action(
-                    state2vec(current_state, target=1)[np.newaxis], eps=eps
-                )
+            # for _ in trange(1, desc="explore"):
+            current_state = env.observe()
 
-                transition = env.act(action1, action2)
+            action1 = agent1.select_action(
+                state2vec(current_state, target=0)[np.newaxis], eps=eps
+            )
+            action2 = agent2.select_action(
+                state2vec(current_state, target=1)[np.newaxis], eps=eps
+            )
 
-                cumulated_reward += transition.reward1 + transition.reward2
+            transition = env.act(action1, action2)
 
-                buffer.push(*transition)
+            cumulated_reward += transition.reward1 + transition.reward2
+
+            buffer.push(*transition)
 
             t.set_postfix(total_reward=cumulated_reward)
 
             # Loop over batches
-            for _ in trange(num_updates, desc="steps"):
 
-                # Start training here
+            # Start training here
+            if len(buffer) >= batch_size:
                 transitions = buffer.sample(batch_size)
                 raw_batch = Transition(*zip(*transitions))
 
@@ -126,20 +127,19 @@ def train_dqn(episodes, batch_size, gamma, num_updates, num_freezes, mem_size=20
                 agent1.optimize(loss1, optimizer1, batch1, gamma)
                 agent2.optimize(loss2, optimizer2, batch2, gamma)
 
-            # Update target Q network and save models every num_freezes epochs
-            if e % num_freezes == 0:
-                agent1.update_target()
-                agent2.update_target()
+                # Update target Q network and save models every num_freezes epochs
+                if e % num_freezes == 0:
+                    agent1.update_target()
+                    agent2.update_target()
 
-            agent1.save("models/ddqn1_new")
-            agent2.save("models/ddqn2_new")
+                agent1.save("models/ddqn1_new")
+                agent2.save("models/ddqn2_new")
 
 
 if __name__ == "__main__":
-    episodes = 1000
-    batch_size = 500
-    num_updates = 200
-    num_freezes = 10
+    episodes = 100000
+    batch_size = 512
+    num_freezes = 4
     gamma = 0.999
 
-    train_dqn(episodes, batch_size, gamma, num_updates, num_freezes, mem_size=10000)
+    train_dqn(episodes, batch_size, gamma, num_freezes, mem_size=10000)

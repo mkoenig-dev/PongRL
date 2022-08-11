@@ -41,8 +41,8 @@ clock = pygame.time.Clock()
 
 user_agent = UserAgent()
 try:
-    ai_agent1 = DDQN.load("models/ddqn1")
-    ai_agent2 = DDQN.load("models/ddqn2")
+    ai_agent1 = DDQN.load("models/ddqn1_new")
+    ai_agent2 = DDQN.load("models/ddqn2_new")
 except OSError:
     ai_agent1 = DQNAgent(DQN())
     ai_agent2 = DQNAgent(DQN())

@@ -27,10 +27,10 @@ actions = [Action.DOWN, Action.STILL, Action.UP]
 
 
 class Reward(Enum):
-    SCORED = 10
-    HIT = 2
+    SCORED = 100
+    HIT = 0
     PLAYING = 0
-    RECEIVED = -10
+    RECEIVED = -100
 
 
 @dataclass

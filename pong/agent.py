@@ -51,6 +51,7 @@ class DDQN(Agent):
         self.dqn = dqn
         self.target_dqn = target_dqn
 
+    @tf.function
     def optimize(self, loss, optimizer, batch, gamma):
 
         # Unpack batch
