@@ -1,12 +1,8 @@
-from code import interact
 import random
 from collections import namedtuple
 from dataclasses import dataclass
 from enum import Enum
 from typing import Tuple
-from xml.dom.expatbuilder import InternalSubsetExtractor
-from icecream import ic
-import pygame
 
 import numpy as np
 
@@ -20,7 +16,9 @@ Batch = namedtuple(
     "Batch", ("states", "actions_indices", "new_states", "rewards", "terminal")
 )
 
-CollisionInfo = namedtuple("CollisionInfo", ("collision", "left", "right", "bottom", "top"))
+CollisionInfo = namedtuple(
+    "CollisionInfo", ("collision", "left", "right", "bottom", "top")
+)
 
 
 class Action(Enum):
@@ -71,9 +69,7 @@ class Player:
 
         # Clip players to field
         self.pos_y = max(
-            min(
-                field.origin[1] + field.height - self.height, self.pos_y
-            ),
+            min(field.origin[1] + field.height - self.height, self.pos_y),
             field.origin[1],
         )
 
@@ -105,7 +101,10 @@ class Ball:
         self.vel = self.random_dir()
 
     def intersect_wall(self, field: Field):
-        if not (field.origin[1] < self.pos[1] - self.radius and self.pos[1] + self.radius < field.origin[1] + field.height):
+        if not (
+            field.origin[1] < self.pos[1] - self.radius
+            and self.pos[1] + self.radius < field.origin[1] + field.height
+        ):
             self.wall_hit += 1
         else:
             self.wall_hit = 0
@@ -152,7 +151,8 @@ class Ball:
                 self.vel[1] = -self.vel[1]
 
         if self.wall_hit == 1:
-            self.vel[1] = - self.vel[1]
+            self.vel[1] = -self.vel[1]
+
 
 class GameState(Enum):
     SCORED = 0
@@ -186,6 +186,7 @@ def calc_perpend(normal, center, point):
 def distance(vec1, vec2):
     return np.linalg.norm(vec2 - vec1)
 
+
 def distance2(vec1, vec2):
     diff = vec2 - vec1
     return diff.dot(diff)
@@ -197,11 +198,13 @@ def intersect_disc(ball: Ball, line: Tuple[np.ndarray, np.ndarray]):
     normal = normal / np.linalg.norm(normal)
     perp, dist = calc_perpend(normal, line[0], ball.pos)
 
-    if abs(dist) < ball.radius and (distance(perp, line[0]) + distance(perp, line[1])) == distance(line[0], line[1]):
+    if abs(dist) < ball.radius and (
+        distance(perp, line[0]) + distance(perp, line[1])
+    ) == distance(line[0], line[1]):
         return perp
-    elif distance2(ball.pos, line[0]) < ball.radius ** 2:
+    elif distance2(ball.pos, line[0]) < ball.radius**2:
         return line[0]
-    elif distance2(ball.pos, line[1]) < ball.radius ** 2:
+    elif distance2(ball.pos, line[1]) < ball.radius**2:
         return line[1]
     else:
         return None
@@ -212,7 +215,7 @@ def intersect(ball: Ball, player: Player):
     p_br = np.array([player.pos_x + player.width, player.pos_y])
     p_tl = np.array([player.pos_x, player.pos_y + player.height])
     p_tr = np.array([player.pos_x + player.width, player.pos_y + player.height])
-    
+
     pir = point_in_rectangle(ball.pos, player)
     inter_left = intersect_disc(ball, (p_bl, p_tl))
     inter_right = intersect_disc(ball, (p_br, p_tr))
@@ -222,17 +225,25 @@ def intersect(ball: Ball, player: Player):
     center_y = player.pos_y + 0.5 * player.height
 
     # Determine normalized heifht
-    rel_inter_left = (inter_left[1] - center_y) / player.height if inter_left is not None else inter_left
-    rel_inter_right = (inter_right[1] - center_y) / player.height if inter_right is not None else inter_right
+    rel_inter_left = (
+        (inter_left[1] - center_y) / player.height
+        if inter_left is not None
+        else inter_left
+    )
+    rel_inter_right = (
+        (inter_right[1] - center_y) / player.height
+        if inter_right is not None
+        else inter_right
+    )
 
     info = (inter_left, inter_right, inter_bottom, inter_top)
 
     collision_info = CollisionInfo(
-        any([pnt is not None for pnt in info]) or pir, 
-        rel_inter_left, 
-        rel_inter_right, 
-        inter_bottom, 
-        inter_top
+        any([pnt is not None for pnt in info]) or pir,
+        rel_inter_left,
+        rel_inter_right,
+        inter_bottom,
+        inter_top,
     )
 
     return collision_info
@@ -312,7 +323,10 @@ class Environment:
     def new_gamestate(self):
         if self.ball.pos[0] - self.ball.radius < self.field.origin[0]:
             game_state = GameState.RECEIVED
-        elif self.ball.pos[0] + self.ball.radius > self.field.origin[0] + self.field.width:
+        elif (
+            self.ball.pos[0] + self.ball.radius
+            > self.field.origin[0] + self.field.width
+        ):
             game_state = GameState.SCORED
         else:
             game_state = GameState.PLAYING

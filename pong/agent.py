@@ -56,7 +56,6 @@ class DDQN(Agent):
 
     @tf.function
     def optimize(self, loss, optimizer, batch, gamma):
-
         # Unpack batch
         states = batch.states
         action_indices = batch.actions_indices
@@ -69,9 +68,10 @@ class DDQN(Agent):
             q_values = tf.gather(self.dqn(states), action_indices, axis=1)
 
             # Calculate policy q value based on max Q
-            best_next_actions = tf.argmax(self.dqn(new_states), axis=1)
+            # best_next_actions = tf.argmax(self.dqn(new_states), axis=1)
             next_target_q_vals = self.target_dqn(new_states)
-            inter_q_values = tf.gather(next_target_q_vals, best_next_actions, axis=1)
+            # inter_q_values = tf.gather(next_target_q_vals, best_next_actions, axis=1)
+            inter_q_values = tf.reduce_max(next_target_q_vals, axis=1)
             target_q = rewards + (gamma * inter_q_values * (1.0 - terminal))
 
             # Calculate Huber loss
@@ -79,9 +79,10 @@ class DDQN(Agent):
 
         # Get gradients w.r.t. weights
         grads = tape.gradient(loss_value, self.dqn.trainable_variables)
+        clipped_grads = [tf.clip_by_value(grad, -1.0, 1.0) for grad in grads]
 
         # Update policy network
-        optimizer.apply_gradients(zip(grads, self.dqn.trainable_variables))
+        optimizer.apply_gradients(zip(clipped_grads, self.dqn.trainable_variables))
 
         return loss_value
 
@@ -95,7 +96,14 @@ class DDQN(Agent):
         return actions[i]
 
     def update_target(self, tau=0.99):
-        self.target_dqn.set_weights([(1.0 - tau) * w_dqn + tau * w_target for w_dqn, w_target in zip(self.dqn.get_weights(), self.target_dqn.get_weights())])
+        self.target_dqn.set_weights(
+            [
+                (1.0 - tau) * w_dqn + tau * w_target
+                for w_dqn, w_target in zip(
+                    self.dqn.get_weights(), self.target_dqn.get_weights()
+                )
+            ]
+        )
 
     def save(self, path: str):
         path = Path(path)
@@ -123,7 +131,7 @@ class DDQN(Agent):
             except Exception:
                 raise RuntimeError(f"Unable to load DDQN from {path}")
         else:
-            raise OSError(f"One of the paths for loading does not exist.")
+            raise OSError("One of the paths for loading does not exist.")
 
 
 class UserAgent(Agent):

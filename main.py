@@ -3,8 +3,6 @@ import numpy as np
 from pong.agent import DDQN, DQN, UserAgent
 from pong.environment import Environment, Field, state2vec
 from pong.renderer import Renderer
-import tensorflow as tf
-
 
 input_shape = 4
 
@@ -47,7 +45,7 @@ while not renderer.game_over:
         action = ai_agent1.select_action(input_tensor1)
 
     env.act(action, ai_agent2.select_action(input_tensor2))
-    
+
     renderer.render(90)
 
 renderer.quit()

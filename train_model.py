@@ -7,9 +7,10 @@ import numpy as np
 import tensorflow as tf
 from tqdm import trange
 
-from pong.agent import DDQN, DQN, UserAgent
+from pong.agent import DDQN, DQN
 from pong.environment import Batch, Environment, Field, Transition, state2vec
 from pong.renderer import Renderer
+
 
 class ReplayBuffer(object):
     def __init__(self, mem_size):
@@ -31,7 +32,6 @@ def epsilon_decay(e, num_episodes, eps_start, eps_end, warm_up=False):
         return 0.0
     else:
         return (eps_end - eps_start) * ((e + 1) / num_episodes) + eps_start
-
 
 
 def repack_batch(batch, batch_size, target=0):
@@ -60,7 +60,7 @@ def repack_batch(batch, batch_size, target=0):
     )
 
 
-def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size=10000):
+def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
     # Define actors per player
@@ -90,8 +90,8 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size=10000):
 
     loss1 = tf.keras.losses.Huber()
     loss2 = tf.keras.losses.Huber()
-    optimizer1 = tf.keras.optimizers.RMSprop(0.00025)
-    optimizer2 = tf.keras.optimizers.RMSprop(0.00025)
+    optimizer1 = tf.keras.optimizers.RMSprop(0.0001)
+    optimizer2 = tf.keras.optimizers.RMSprop(0.0001)
 
     agent1.dqn.compile(loss=loss1, optimizer=optimizer1)
     agent2.dqn.compile(loss=loss2, optimizer=optimizer2)
@@ -110,7 +110,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size=10000):
             renderer.events()
 
             # get epsilon greedy value
-            eps = epsilon_decay(e, episodes, eps_start, eps_end, warm_up=e<1000)
+            eps = epsilon_decay(e, episodes, eps_start, eps_end, warm_up=e < 1000)
 
             # One new step
 
@@ -151,7 +151,6 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size=10000):
 
                 t.set_postfix(loss=np.mean(loss_values), total_reward=cumulated_reward)
 
-
                 # Update target Q network and save models every num_freezes epochs
                 if e % num_freezes == 0:
                     agent1.update_target(tau)
@@ -165,15 +164,15 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size=10000):
                 if len(loss_values) > 500:
                     loss_values.clear()
 
-
     renderer.quit()
 
 
 if __name__ == "__main__":
-    episodes = 100000
-    batch_size = 32
+    episodes = 1000000
+    mem_size = 100000
+    batch_size = 128
     num_freezes = 1
     gamma = 0.99
     tau = 0.9
 
-    train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size=50000)
+    train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size)
