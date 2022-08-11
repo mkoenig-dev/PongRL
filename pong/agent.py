@@ -13,15 +13,18 @@ from .environment import Action, actions
 class DQN(tf.keras.Model):
     def __init__(self):
         super(DQN, self).__init__()
-        self.x1 = Dense(32, activation="relu")
-        self.x2 = Dense(64, activation="relu")
+        self.x1 = Dense(64, activation="relu")
         self.x2 = Dense(128, activation="relu")
-        self.x3 = Dense(3, activation="softmax")
+        self.x3 = Dense(256, activation="relu")
+        self.x4 = Dense(128, activation="relu")
+        self.x5 = Dense(3, activation="linear")
 
     def call(self, x):
         x = self.x1(x)
         x = self.x2(x)
-        out = self.x3(x)
+        x = self.x3(x)
+        x = self.x4(x)
+        out = self.x5(x)
 
         return out
 
@@ -80,6 +83,8 @@ class DDQN(Agent):
         # Update policy network
         optimizer.apply_gradients(zip(grads, self.dqn.trainable_variables))
 
+        return loss_value
+
     def select_action(self, states, eps=None) -> Action:
         if eps is not None and random.random() > eps:
             return random.choice(actions)
@@ -89,8 +94,8 @@ class DDQN(Agent):
 
         return actions[i]
 
-    def update_target(self):
-        self.target_dqn.set_weights(self.dqn.get_weights())
+    def update_target(self, tau=0.99):
+        self.target_dqn.set_weights([(1.0 - tau) * w_dqn + tau * w_target for w_dqn, w_target in zip(self.dqn.get_weights(), self.target_dqn.get_weights())])
 
     def save(self, path: str):
         path = Path(path)
@@ -122,14 +127,17 @@ class DDQN(Agent):
 
 
 class UserAgent(Agent):
-    def select_action(self, state, event=None) -> Action:
-        action = Action.STILL
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
-                action = Action.DOWN
-            elif event.key == pygame.K_DOWN:
-                action = Action.UP
-        elif event.type == pygame.KEYUP:
-            action = Action.STILL
+    def __init__(self):
+        self.action = Action.STILL
 
-        return action
+    def select_action(self, state, event=None) -> Action:
+        if event is not None:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    self.action = Action.DOWN
+                elif event.key == pygame.K_DOWN:
+                    self.action = Action.UP
+            elif event.type == pygame.KEYUP:
+                self.action = Action.STILL
+
+        return self.action
