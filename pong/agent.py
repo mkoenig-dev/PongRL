@@ -117,6 +117,8 @@ class DDQN(Agent):
                 return DDQN(dqn, target)
             except Exception:
                 raise RuntimeError(f"Unable to load DDQN from {path}")
+        else:
+            raise OSError(f"One of the paths for loading does not exist.")
 
 
 class UserAgent(Agent):

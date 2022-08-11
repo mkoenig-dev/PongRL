@@ -7,6 +7,7 @@ from pong.environment import Action, Ball, Environment, Field, Player, state2vec
 pygame.init()
 
 white = (255, 255, 255)
+gray = (128, 128, 128)
 black = (0, 0, 0)
 red = (255, 0, 0)
 
@@ -16,13 +17,18 @@ def draw_player(p: Player, upscale=1.0):
     y = upscale * p.pos_y
     w = upscale * p.width
     h = upscale * p.height
-    pygame.draw.rect(dis, black, [x, y, w, h])
+    pygame.draw.rect(dis, white, [x, y, w, h])
 
 
 def draw_ball(ball: Ball, upscale=1.0):
     pos = upscale * ball.pos
     rad = upscale * ball.radius
-    pygame.draw.circle(dis, black, pos, rad)
+    pygame.draw.circle(dis, white, pos, rad)
+
+def draw_field(field: Field, upscale=1.0):
+    x_center = upscale * (field.origin[0] + 0.5 * field.width)
+    dis.fill(black)
+    pygame.draw.line(dis, gray, (x_center, upscale*field.origin[1]), (x_center, upscale*(field.origin[1] + field.height)))
 
 
 WIDTH = 800
@@ -43,7 +49,7 @@ user_agent = UserAgent()
 try:
     ai_agent1 = DDQN.load("models/ddqn1_new")
     ai_agent2 = DDQN.load("models/ddqn2_new")
-except OSError:
+except Exception:
     ai_agent1 = DQNAgent(DQN())
     ai_agent2 = DQNAgent(DQN())
 
@@ -63,7 +69,7 @@ while not game_over:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
-        # action = user_agent.select_action(None, event)
+        action = user_agent.select_action(None, event)
 
     dis.fill(white)
     # Transform state tuple to input tensor
@@ -73,9 +79,10 @@ while not game_over:
     # input_tensor2 = flip_input(state2vec(current_state, target="opponent"))
     # input_tensor2 = np.expand_dims(input_tensor2, axis = 0)
 
-    action = ai_agent1.select_action(input_tensor1)
+    # action = ai_agent1.select_action(input_tensor1)
 
     env.act(action, ai_agent2.select_action(input_tensor2))
+    draw_field(field, upscale=m2p)
     draw_player(env.p1, m2p)
     draw_player(env.p2, m2p)
     draw_ball(env.ball, m2p)
