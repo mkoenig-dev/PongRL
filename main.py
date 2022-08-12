@@ -1,6 +1,6 @@
 import numpy as np
 
-from pong.agent import DDQN, DQN, UserAgent
+from pong.agent import DDQN, DQN, UserAgent, SimpleAI
 from pong.environment import Environment, Field, state2vec
 from pong.renderer import Renderer
 
@@ -13,8 +13,10 @@ renderer = Renderer(800, 400, env)
 
 # Load user agents
 user_agent = UserAgent()
+simple_agent = SimpleAI(field, env.ball, env.p2)
+
 try:
-    ai_agent1 = DDQN.load("models/ddqn1_new")
+    ai_agent1 = DDQN.load("models/dqnn_single")
     ai_agent2 = DDQN.load("models/ddqn2_new")
 except Exception as err:
     print(err)
@@ -30,7 +32,7 @@ def flip_input(inputs):
     return inputs
 
 
-user_control = True
+user_control = False
 
 
 while not renderer.game_over:
@@ -44,9 +46,12 @@ while not renderer.game_over:
     if not user_control:
         action = ai_agent1.select_action(input_tensor1)
 
-    env.act(action, ai_agent2.select_action(input_tensor2))
+    #action2 = ai_agent2.select_action(input_tensor2)
+    action2 = simple_agent.select_action(current_state)
 
-    renderer.render(90)
+    env.act(action, action2)
+
+    renderer.render(120)
 
 renderer.quit()
 quit()

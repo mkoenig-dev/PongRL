@@ -6,8 +6,9 @@ import numpy as np
 import pygame
 import tensorflow as tf
 from tensorflow.keras.layers import Dense
+from copy import deepcopy
 
-from .environment import Action, actions
+from .environment import Action, Ball, Field, Player, State, actions
 
 
 class DQN(tf.keras.Model):
@@ -133,6 +134,80 @@ class DDQN(Agent):
         else:
             raise OSError("One of the paths for loading does not exist.")
 
+
+class SimpleAI(Agent):
+    def __init__(self, field: Field, ball: Ball, player: Player) -> None:
+        self.field = field
+        self.ball = ball
+        self.player = player
+        self.target = int(player.pos_x > self.field.origin[0] + 0.5 * self.field.width)
+        self.agent = "agent" if self.target == 0 else "opponent"
+        self.last_action = Action.STILL
+        self.real_target_pos = np.zeros(2)
+        self.target_pos = np.zeros(2)
+
+    def predict_intersection(self, state: State, depth=0):
+
+        ball_pos = state.ball_pos.copy()
+        ball_dir = state.ball_dir.copy()
+
+        # top and bottom wall y_pos
+        vrange = np.array([self.field.origin[1] + self.ball.radius, self.field.origin[1] + self.field.height - self.ball.radius])
+
+        # get left and right goal line
+        hrange = np.array([self.field.origin[0] + self.ball.radius, self.field.origin[0] + self.field.width - self.ball.radius])
+
+        # estimate number of steps to hit the wall
+        ysteps = -(vrange - ball_pos[1]) / (ball_dir[1] * self.field.speed)
+        ysteps = np.ceil(ysteps.max())
+
+        xsteps = (hrange - ball_pos[0]) / (ball_dir[0] * self.field.speed)
+        xsteps = np.ceil(xsteps[self.target])
+
+        if xsteps > 0 and depth < 5:
+            if ysteps > xsteps:
+                return ball_pos + self.field.speed * ball_dir * xsteps
+            else:
+
+                ball_pos += self.field.speed * ball_dir * ysteps
+                ball_dir[1]  = -ball_dir[1]
+                
+                # Recursive call on new position
+                next_state = State(state.agent, state.opponent, ball_pos, ball_dir)
+                return self.predict_intersection(next_state, depth=depth+1)
+        else:
+            return np.array([hrange[self.target], 0.5 * vrange.sum()])
+            
+
+
+    def select_action(self, state) -> Action:
+        target_pos = self.predict_intersection(state)
+        target_diff = target_pos - self.real_target_pos
+
+        if target_diff.dot(target_diff) > 2.0:
+            # set new swiffled target
+            self.real_target_pos = target_pos
+            self.target_pos = target_pos.copy()
+            self.target_pos[1] -= random.random() * self.player.height
+            
+
+        player_pos = getattr(state, self.agent)
+        ydiff = self.target_pos[1] - player_pos
+
+        if random.random() > 0.9:
+            return self.last_action
+
+        if abs(ydiff) < 1.0:
+            self.last_action = Action.STILL
+        elif ydiff < 0:
+            self.last_action = Action.DOWN
+        elif ydiff > 0:
+            self.last_action = Action.UP
+        else:
+            self.last_action = Action.STILL
+
+        return self.last_action
+        
 
 class UserAgent(Agent):
     def __init__(self):

@@ -52,6 +52,7 @@ class Player:
     pos_y = 0.0
     pos_x = 0.0
     hit = False
+    player_speed = 0.7
 
     def reset(self, x, y):
         self.pos_x = x
@@ -65,7 +66,7 @@ class Player:
 
     def update(self, action: Action, field: Field):
         # update position
-        self.pos_y += field.speed * action.value
+        self.pos_y += field.speed * action.value * self.player_speed
 
         # Clip players to field
         self.pos_y = max(
@@ -84,13 +85,14 @@ class Ball:
     last_touch = -1
     max_angle = np.deg2rad(55.0)
     ball_speed = 2.0
+    kickoff_speed = 0.7
 
     def random_dir(self):
         theta = 0.5 * np.random.rand(1)[0] * np.pi - np.pi * 0.25
         vel = np.array([np.cos(theta), np.sin(theta)])
         sign = random.choice((-1.0, 1.0))
 
-        return self.ball_speed * sign * vel
+        return self.kickoff_speed * self.ball_speed * sign * vel
 
     def reset(self, x, y):
         self.pos[0] = x
@@ -307,7 +309,7 @@ class Environment:
             "ball_dir": self.ball.vel,
             "hit": self.ball.hit,
             "wall_hit": self.ball.wall_hit,
-            "score": np.zeros(2),
+            "score": self.state["score"],
             "game_state": game_state,
             "reward1": reward1,
             "reward2": reward2,

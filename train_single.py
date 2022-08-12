@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import trange
 
-from pong.agent import DDQN, DQN
+from pong.agent import DDQN, DQN, SimpleAI
 from pong.environment import Batch, Environment, Field, Transition, state2vec
 from pong.renderer import Renderer
 
@@ -64,37 +64,29 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
     # Define actors per player
-    policy1 = DQN()
-    policy1.build((None, 6))
+    policy = DQN()
+    policy.build((None, 6))
 
-    policy2 = DQN()
-    policy2.build((None, 6))
+    target = DQN()
+    target.build((None, 6))
+    target.set_weights(policy.get_weights())
 
-    target1 = DQN()
-    target1.build((None, 6))
-    target1.set_weights(policy1.get_weights())
 
-    target2 = DQN()
-    target2.build((None, 6))
-    target2.set_weights(policy2.get_weights())
-
-    agent1 = DDQN(policy1, target1)
-    agent2 = DDQN(policy2, target2)
+    agent = DDQN(policy, target)
 
     env = Environment(Field())
+
+    ai_agent = SimpleAI(env.field, env.ball, env.p2)
 
     # Initialize training renderer
     renderer = Renderer(800, 400, env)
 
     # Training optimizer and loss
 
-    loss1 = tf.keras.losses.Huber()
-    loss2 = tf.keras.losses.Huber()
-    optimizer1 = tf.keras.optimizers.RMSprop(0.0001)
-    optimizer2 = tf.keras.optimizers.RMSprop(0.0001)
+    loss = tf.keras.losses.Huber()
+    optimizer = tf.keras.optimizers.Adam(0.00025)
 
-    agent1.dqn.compile(loss=loss1, optimizer=optimizer1)
-    agent2.dqn.compile(loss=loss2, optimizer=optimizer2)
+    agent.dqn.compile(loss=loss, optimizer=optimizer)
 
     # Random exploration
     eps_start = 0.1
@@ -117,17 +109,15 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
             # for _ in trange(1, desc="explore"):
             current_state = env.observe()
 
-            action1 = agent1.select_action(
+            action1 = agent.select_action(
                 state2vec(current_state, target=0)[np.newaxis], eps=eps
             )
 
-            action2 = agent2.select_action(
-                state2vec(current_state, target=1)[np.newaxis], eps=eps
-            )
+            action2 = ai_agent.select_action(current_state)
 
             transition = env.act(action1, action2)
 
-            cumulated_reward += transition.reward1 + transition.reward2
+            cumulated_reward += transition.reward1
 
             buffer.push(*transition)
 
@@ -139,27 +129,22 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                 transitions = buffer.sample(batch_size)
                 raw_batch = Transition(*zip(*transitions))
 
-                batch1 = repack_batch(raw_batch, batch_size, target=0)
-                batch2 = repack_batch(raw_batch, batch_size, target=1)
+                batch = repack_batch(raw_batch, batch_size, target=0)
 
                 # Update step for both agents
-                loss_val1 = agent1.optimize(loss1, optimizer1, batch1, gamma)
-                loss_val2 = agent2.optimize(loss2, optimizer2, batch2, gamma)
+                loss_val = agent.optimize(loss, optimizer, batch, gamma)
 
-                loss_values.append(loss_val1)
-                loss_values.append(loss_val2)
+                loss_values.append(loss_val)
 
                 t.set_postfix(loss=np.mean(loss_values), total_reward=cumulated_reward)
 
                 # Update target Q network and save models every num_freezes epochs
                 if e % num_freezes == 0:
-                    agent1.update_target(tau)
-                    agent2.update_target(tau)
+                    agent.update_target(tau)
 
                 # Save networks
                 if e % 5000 == 0:
-                    agent1.save("models/ddqn1_new")
-                    agent2.save("models/ddqn2_new")
+                    agent.save("models/ddqn_single")
 
                 if len(loss_values) > 500:
                     loss_values.clear()
@@ -170,7 +155,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 if __name__ == "__main__":
     episodes = 1000000
     mem_size = 100000
-    batch_size = 128
+    batch_size = 512
     num_freezes = 1
     gamma = 0.99
     tau = 0.9
