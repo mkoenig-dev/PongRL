@@ -31,8 +31,8 @@ actions = [Action.DOWN, Action.STILL, Action.UP]
 
 
 class Reward(Enum):
-    SCORED = 1
-    HIT = 0
+    SCORED = 5
+    HIT = 1
     PLAYING = 0
     RECEIVED = -1
 

@@ -1,3 +1,4 @@
+from pathlib import Path
 import random
 from collections import deque
 from functools import partial
@@ -31,7 +32,7 @@ def epsilon_decay(e, num_episodes, eps_start, eps_end, warm_up=False):
     if warm_up:
         return 0.0
     else:
-        return (eps_end - eps_start) * ((e + 1) / num_episodes) + eps_start
+        return np.clip((eps_end - eps_start) * ((e + 1) / num_episodes) + eps_start, eps_start, eps_end)
 
 
 def repack_batch(batch, batch_size, target=0):
@@ -63,16 +64,19 @@ def repack_batch(batch, batch_size, target=0):
 def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
-    # Define actors per player
-    policy = DQN()
-    policy.build((None, 6))
+    try:
+        agent = DDQN.load("models/ddqn_single")
+    except:
+        # Define actors per player
+        policy = DQN()
+        policy.build((None, 6))
 
-    target = DQN()
-    target.build((None, 6))
-    target.set_weights(policy.get_weights())
+        target = DQN()
+        target.build((None, 6))
+        target.set_weights(policy.get_weights())
 
 
-    agent = DDQN(policy, target)
+        agent = DDQN(policy, target)
 
     env = Environment(Field())
 
@@ -84,13 +88,13 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     # Training optimizer and loss
 
     loss = tf.keras.losses.Huber()
-    optimizer = tf.keras.optimizers.Adam(0.00025)
+    optimizer = tf.keras.optimizers.Adam(0.00001)
 
     agent.dqn.compile(loss=loss, optimizer=optimizer)
 
     # Random exploration
-    eps_start = 0.1
-    eps_end = 0.98
+    eps_start = 0.7
+    eps_end = 0.9
 
     loss_values = []
 
@@ -102,7 +106,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
             renderer.events()
 
             # get epsilon greedy value
-            eps = epsilon_decay(e, episodes, eps_start, eps_end, warm_up=e < 1000)
+            eps = epsilon_decay(e, round(0.8*episodes), eps_start, eps_end, warm_up=e < 1000)
 
             # One new step
 
