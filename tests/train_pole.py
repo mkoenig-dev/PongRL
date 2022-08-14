@@ -1,15 +1,17 @@
-import gym
-from collections import deque, namedtuple
 import random
-from tqdm import trange
+from collections import deque, namedtuple
+
+import gym
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Dense
-import numpy as np
+from tqdm import trange
 
 from pong.agent import DQNModel
 
-
-Transition = namedtuple("Transition", ("state", "action", "reward", "next_state", "done"))
+Transition = namedtuple(
+    "Transition", ("state", "action", "reward", "next_state", "done")
+)
 Batch = namedtuple(
     "Batch", ("states", "actions_indices", "new_states", "rewards", "terminal")
 )
@@ -86,8 +88,10 @@ def train_dqn(episodes, batch_size, gamma, tau, mem_size):
 
             while not terminated:
                 action = dqn.select_action(state[np.newaxis, :], eps)
-                observation, reward, terminated, truncated, info = env.step(action.numpy())
-                
+                observation, reward, terminated, truncated, info = env.step(
+                    action.numpy()
+                )
+
                 buffer.push(state, action, reward, observation, truncated)
                 state = observation
 
@@ -96,20 +100,11 @@ def train_dqn(episodes, batch_size, gamma, tau, mem_size):
                     batch = buffer.sample(batch_size)
                     loss_val = dqn.optimize(loss, optimizer, batch, gamma)
                     losses.append(loss_val.numpy())
-                    
+
                     dqn.update_target(tau)
 
                 t.set_postfix(loss=np.mean(losses))
 
 
-
-
-
 if __name__ == "__main__":
-    train_dqn(
-        episodes=10000,
-        batch_size=16,
-        gamma=0.999,
-        tau=0.8,
-        mem_size=100000
-    )
+    train_dqn(episodes=10000, batch_size=16, gamma=0.999, tau=0.8, mem_size=100000)

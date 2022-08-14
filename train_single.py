@@ -1,4 +1,3 @@
-from pathlib import Path
 import random
 from collections import deque
 from functools import partial
@@ -32,7 +31,11 @@ def epsilon_decay(e, num_episodes, eps_start, eps_end, warm_up=False):
     if warm_up:
         return 0.0
     else:
-        return np.clip((eps_end - eps_start) * ((e + 1) / num_episodes) + eps_start, eps_start, eps_end)
+        return np.clip(
+            (eps_end - eps_start) * ((e + 1) / num_episodes) + eps_start,
+            eps_start,
+            eps_end,
+        )
 
 
 def repack_batch(batch, batch_size, target=0):
@@ -66,7 +69,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
     try:
         agent = DDQN.load("models/ddqn_single")
-    except:
+    except OSError:
         # Define actors per player
         policy = DQN()
         policy.build((None, 6))
@@ -74,7 +77,6 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
         target = DQN()
         target.build((None, 6))
         target.set_weights(policy.get_weights())
-
 
         agent = DDQN(policy, target)
 
@@ -93,7 +95,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     agent.dqn.compile(loss=loss, optimizer=optimizer)
 
     # Random exploration
-    eps_start = 0.7
+    eps_start = 0.1
     eps_end = 0.9
 
     loss_values = []
@@ -106,7 +108,9 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
             renderer.events()
 
             # get epsilon greedy value
-            eps = epsilon_decay(e, round(0.8*episodes), eps_start, eps_end, warm_up=e < 1000)
+            eps = epsilon_decay(
+                e, round(0.8 * episodes), eps_start, eps_end, warm_up=e < 200
+            )
 
             # One new step
 
@@ -148,7 +152,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
                 # Save networks
                 if e % 5000 == 0:
-                    agent.save("models/ddqn_single")
+                    agent.save("models/ddqn_single_test")
 
                 if len(loss_values) > 500:
                     loss_values.clear()

@@ -54,8 +54,13 @@ class Renderer(object):
 
     def draw_score(self, upscale=1):
         score = self.env.states[-1]["score"].astype(int)
-        img = self.font.render(f'{score[0]} : {score[1]}', True, gray, black)
-        x_pos = self.env.field.origin[0] + (self.env.field.width - 0.25 * img.get_bounding_rect().width) * 0.5 * upscale
+        img = self.font.render(f"{score[0]} : {score[1]}", True, gray, black)
+        x_pos = (
+            self.env.field.origin[0]
+            + (self.env.field.width - 0.25 * img.get_bounding_rect().width)
+            * 0.5
+            * upscale
+        )
         y_pos = self.env.field.height * upscale * 0.05
         self.screen.blit(img, (x_pos, y_pos))
 

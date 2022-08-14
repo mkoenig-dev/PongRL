@@ -9,7 +9,8 @@ from tqdm import trange
 
 from pong.agent import DDQN, DQN
 from pong.environment import Batch, Environment, Field, Transition, state2vec
-from pong.renderer import Renderer
+
+# from pong.renderer import Renderer
 
 
 class ReplayBuffer(object):

@@ -6,7 +6,6 @@ import numpy as np
 import pygame
 import tensorflow as tf
 from tensorflow.keras.layers import Dense
-from copy import deepcopy
 
 from .environment import Action, Ball, Field, Player, State, actions
 
@@ -55,7 +54,6 @@ class DDQN(Agent):
         self.dqn = dqn
         self.target_dqn = target_dqn
 
-    @tf.function
     def optimize(self, loss, optimizer, batch, gamma):
         # Unpack batch
         states = batch.states
@@ -64,26 +62,32 @@ class DDQN(Agent):
         rewards = batch.rewards
         terminal = batch.terminal
 
+        next_target_q_vals = self.target_dqn(new_states)
+        inter_q_values = tf.reduce_max(next_target_q_vals, axis=1)
+        target_q = rewards + gamma * inter_q_values * (1.0 - terminal)
+
         with tf.GradientTape() as tape:
             # Calculate target Q value for chosen actions
-            q_values = tf.gather(self.dqn(states), action_indices, axis=1)
+            # q_values = tf.gather(self.dqn(states), action_indices, axis=1)
+            q_values = tf.math.reduce_sum(
+                self.dqn(states) * tf.one_hot(action_indices, 3), axis=1
+            )
 
             # Calculate policy q value based on max Q
             # best_next_actions = tf.argmax(self.dqn(new_states), axis=1)
-            next_target_q_vals = self.target_dqn(new_states)
+
             # inter_q_values = tf.gather(next_target_q_vals, best_next_actions, axis=1)
-            inter_q_values = tf.reduce_max(next_target_q_vals, axis=1)
-            target_q = rewards + (gamma * inter_q_values * (1.0 - terminal))
 
             # Calculate Huber loss
             loss_value = loss(q_values, target_q)
 
         # Get gradients w.r.t. weights
         grads = tape.gradient(loss_value, self.dqn.trainable_variables)
-        clipped_grads = [tf.clip_by_value(grad, -1.0, 1.0) for grad in grads]
+        # clipped_grads = [tf.clip_by_value(grad, -1.0, 1.0) for grad in grads]
 
         # Update policy network
-        optimizer.apply_gradients(zip(clipped_grads, self.dqn.trainable_variables))
+        # optimizer.apply_gradients(zip(clipped_grads, self.dqn.trainable_variables))
+        optimizer.apply_gradients(zip(grads, self.dqn.trainable_variables))
 
         return loss_value
 
@@ -152,10 +156,20 @@ class SimpleAI(Agent):
         ball_dir = state.ball_dir.copy()
 
         # top and bottom wall y_pos
-        vrange = np.array([self.field.origin[1] + self.ball.radius, self.field.origin[1] + self.field.height - self.ball.radius])
+        vrange = np.array(
+            [
+                self.field.origin[1] + self.ball.radius,
+                self.field.origin[1] + self.field.height - self.ball.radius,
+            ]
+        )
 
         # get left and right goal line
-        hrange = np.array([self.field.origin[0] + self.ball.radius, self.field.origin[0] + self.field.width - self.ball.radius])
+        hrange = np.array(
+            [
+                self.field.origin[0] + self.ball.radius,
+                self.field.origin[0] + self.field.width - self.ball.radius,
+            ]
+        )
 
         # estimate number of steps to hit the wall
         ysteps = -(vrange - ball_pos[1]) / (ball_dir[1] * self.field.speed)
@@ -170,15 +184,13 @@ class SimpleAI(Agent):
             else:
 
                 ball_pos += self.field.speed * ball_dir * ysteps
-                ball_dir[1]  = -ball_dir[1]
-                
+                ball_dir[1] = -ball_dir[1]
+
                 # Recursive call on new position
                 next_state = State(state.agent, state.opponent, ball_pos, ball_dir)
-                return self.predict_intersection(next_state, depth=depth+1)
+                return self.predict_intersection(next_state, depth=depth + 1)
         else:
             return np.array([hrange[self.target], 0.5 * vrange.sum()])
-            
-
 
     def select_action(self, state) -> Action:
         target_pos = self.predict_intersection(state)
@@ -189,7 +201,6 @@ class SimpleAI(Agent):
             self.real_target_pos = target_pos
             self.target_pos = target_pos.copy()
             self.target_pos[1] -= random.random() * self.player.height
-            
 
         player_pos = getattr(state, self.agent)
         ydiff = self.target_pos[1] - player_pos
@@ -207,7 +218,7 @@ class SimpleAI(Agent):
             self.last_action = Action.STILL
 
         return self.last_action
-        
+
 
 class UserAgent(Agent):
     def __init__(self):
@@ -224,7 +235,6 @@ class UserAgent(Agent):
                 self.action = Action.STILL
 
         return self.action
-
 
 
 class DQNModel(Agent):

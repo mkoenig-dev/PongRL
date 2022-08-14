@@ -58,12 +58,6 @@ class Player:
         self.pos_x = x
         self.pos_y = y
 
-    def out_of_bounds(self, field: Field):
-        return (
-            self.height + self.pos_y >= field.origin + field.height
-            or self.pos_y <= field.origin
-        )
-
     def update(self, action: Action, field: Field):
         # update position
         self.pos_y += field.speed * action.value * self.player_speed
@@ -134,11 +128,14 @@ class Ball:
         return current_collision
 
     def update(self, p1: Player, p2: Player, field: Field):
+        # Update ball position
         self.pos += self.vel * field.speed
 
+        # Calculate intersections
         current_collision = self.intersect_players(p1, p2)
         self.intersect_wall(field)
 
+        # Handle collisions with player
         if self.hit == 1:
             if current_collision.left is not None:
                 bounce_angle = current_collision.left * self.max_angle
@@ -152,6 +149,7 @@ class Ball:
                 # We do not need to check collision anymore
                 self.vel[1] = -self.vel[1]
 
+        # Handle collisions with wall
         if self.wall_hit == 1:
             self.vel[1] = -self.vel[1]
 
