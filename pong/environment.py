@@ -289,12 +289,19 @@ class Environment:
 
         self.states = [self.state]
 
-    def observe(self, i=-1) -> State:
+    def observe(self, i=-1) -> np.ndarray:
         return self.state2vec(State(*list(self.states[i].values())[:4]))
 
-    def state2vec(self, state):
+    def state2vec(self, state: State):
         return np.array(
-            [state.agent, state.opponent, *state.ball_pos, *state.ball_dir],
+            [
+                2.0 * (state.agent / self.field.height) - 1.0,
+                2.0 * (state.opponent / self.field.height) - 1.0,
+                2.0 * (state.ball_pos[0] / self.field.width) - 1.0,
+                2.0 * (state.ball_pos[1] / self.field.height) - 1.0,
+                state.ball_dir[0] / self.ball.ball_speed,
+                state.ball_dir[1] / self.ball.ball_speed,
+            ],
             dtype="float32",
         )
 

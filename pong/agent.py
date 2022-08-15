@@ -194,8 +194,24 @@ class SimpleAI(Agent):
         else:
             return np.array([hrange[self.target], 0.5 * vrange.sum()])
 
+    def transform_state(self, state):
+        return np.array(
+            [
+                0.5 * self.field.height * (state[0] + 1.0),
+                0.5 * self.field.height * (state[1] + 1.0),
+                0.5 * self.field.width * (state[2] + 1.0),
+                0.5 * self.field.height * (state[3] + 1.0),
+                state[4] * self.ball.ball_speed,
+                state[5] * self.ball.ball_speed,
+            ],
+            dtype="float32",
+        )
+
     def select_action(self, state: np.ndarray) -> Action:
-        target_pos = self.predict_intersection(state)
+
+        state_t = self.transform_state(state)
+
+        target_pos = self.predict_intersection(state_t)
         target_diff = target_pos - self.real_target_pos
 
         if target_diff.dot(target_diff) > 2.0:
@@ -204,7 +220,7 @@ class SimpleAI(Agent):
             self.target_pos = target_pos.copy()
             self.target_pos[1] -= random.random() * self.player.height
 
-        player_pos = state[self.target]
+        player_pos = state_t[self.target]
         ydiff = self.target_pos[1] - player_pos
 
         if random.random() > 0.9:

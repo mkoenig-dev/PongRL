@@ -1,6 +1,5 @@
 import random
 from collections import deque
-from functools import partial
 from operator import attrgetter
 
 import numpy as np
@@ -8,7 +7,7 @@ import tensorflow as tf
 from tqdm import trange
 
 from pong.agent import DDQN, DQN, SimpleAI
-from pong.environment import Batch, Environment, Field, Transition, state2vec
+from pong.environment import Batch, Environment, Field, Transition
 from pong.renderer import Renderer
 
 
@@ -157,10 +156,10 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
 if __name__ == "__main__":
     episodes = 1000000
-    mem_size = 100000
+    mem_size = 800000
     batch_size = 512
     num_freezes = 1
     gamma = 0.99
-    tau = 0.999
+    tau = 0.99
 
     train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size)
