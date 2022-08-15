@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pygame
 import tensorflow as tf
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense, Concatenate
 
 from .environment import Action, Ball, Field, Player, State, actions
 
@@ -13,18 +13,18 @@ from .environment import Action, Ball, Field, Player, State, actions
 class DQN(tf.keras.Model):
     def __init__(self):
         super(DQN, self).__init__()
-        self.x1 = Dense(64, activation="relu")
+        self.x1 = Dense(512, activation="relu")
         self.x2 = Dense(128, activation="relu")
-        self.x3 = Dense(256, activation="relu")
-        self.x4 = Dense(128, activation="relu")
-        self.x5 = Dense(3, activation="linear")
+        self.x3 = Dense(128, activation="sigmoid")
+        self.concat = Concatenate()
+        self.out = Dense(3, activation="linear")
 
     def call(self, x):
-        x = self.x1(x)
-        x = self.x2(x)
-        x = self.x3(x)
-        x = self.x4(x)
-        out = self.x5(x)
+        x1 = self.x1(x)
+        x2 = self.x2(x1)
+        x3 = self.x3(x2)
+        x4 = self.concat([x2, x3])
+        out = self.out(x4)
 
         return out
 

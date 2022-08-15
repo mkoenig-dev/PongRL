@@ -18,7 +18,7 @@ user_agent = UserAgent()
 simple_agent = SimpleAI(field, env.ball, env.p2)
 
 try:
-    ai_agent1 = DDQN.load("models/ddqn_single")
+    ai_agent1 = DDQN.load("models/ddqn_res")
     ai_agent2 = DDQN.load("models/ddqn2_new")
 except OSError:
     ai_agent1 = DDQN(DQN(), DQN())

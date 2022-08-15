@@ -9,7 +9,7 @@ from tqdm import trange
 
 from pong.agent import DDQN, DQN, SimpleAI
 from pong.environment import Batch, Environment, Field, Transition, state2vec
-from pong.renderer import Renderer
+# from pong.renderer import Renderer
 
 
 class ReplayBuffer(object):
@@ -68,7 +68,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
     try:
-        agent = DDQN.load("models/ddqn_single")
+        agent = DDQN.load("models/ddqn_res")
     except OSError:
         # Define actors per player
         policy = DQN()
@@ -85,12 +85,12 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     ai_agent = SimpleAI(env.field, env.ball, env.p2)
 
     # Initialize training renderer
-    renderer = Renderer(800, 400, env)
+    # renderer = Renderer(800, 400, env)
 
     # Training optimizer and loss
 
     loss = tf.keras.losses.Huber()
-    optimizer = tf.keras.optimizers.Adam(0.00001)
+    optimizer = tf.keras.optimizers.RMSprop(1e-5)
 
     agent.dqn.compile(loss=loss, optimizer=optimizer)
 
@@ -105,7 +105,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
         for e in t:
 
-            renderer.events()
+            # renderer.events()
 
             # get epsilon greedy value
             eps = epsilon_decay(
@@ -130,7 +130,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
             buffer.push(*transition)
 
             # Render current scene
-            renderer.render()
+            # renderer.render()
 
             # Start training here
             if len(buffer) >= batch_size:
@@ -140,9 +140,9 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                 batch = repack_batch(raw_batch, batch_size, target=0)
 
                 # Update step for both agents
-                loss_val = agent.optimize(loss, optimizer, batch, gamma)
-
-                loss_values.append(loss_val)
+                for _ in range(4):
+                    loss_val = agent.optimize(loss, optimizer, batch, gamma)
+                    loss_values.append(loss_val)
 
                 t.set_postfix(loss=np.mean(loss_values), total_reward=cumulated_reward)
 
@@ -151,21 +151,21 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                     agent.update_target(tau)
 
                 # Save networks
-                if e % 5000 == 0:
-                    agent.save("models/ddqn_single_test")
+                if e % 5000 == 0 and e > 0:
+                    agent.save("models/ddqn_res")
 
                 if len(loss_values) > 500:
                     loss_values.clear()
 
-    renderer.quit()
+    # renderer.quit()
 
 
 if __name__ == "__main__":
-    episodes = 1000000
-    mem_size = 100000
+    episodes = 100000
+    mem_size = 10000
     batch_size = 512
     num_freezes = 1
-    gamma = 0.99
-    tau = 0.9
+    gamma = 0.999
+    tau = 0.95
 
     train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size)

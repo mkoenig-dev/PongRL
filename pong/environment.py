@@ -1,3 +1,4 @@
+from copy import deepcopy
 import random
 from collections import namedtuple
 from dataclasses import dataclass
@@ -297,7 +298,7 @@ class Environment:
         self.states = [self.state]
 
     def observe(self, i=-1) -> State:
-        return State(*list(self.states[i].values())[:4])
+        return deepcopy(State(*list(self.states[i].values())[:4]))
 
     def update_state(self, game_state, reward1, reward2):
         self.state = {
