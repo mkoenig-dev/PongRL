@@ -44,11 +44,9 @@ while not renderer.game_over:
 
     # Transform state tuple to input tensor
     current_state = env.observe()
-    input_tensor1 = state2vec(current_state, target=0)[np.newaxis, :]
-    input_tensor2 = state2vec(current_state, target=1)[np.newaxis, :]
 
     if not user_control:
-        action = ai_agent1.select_action(input_tensor1)
+        action = ai_agent1.select_action(current_state[np.newaxis])
 
     # action2 = ai_agent2.select_action(input_tensor2)
     action2 = simple_agent.select_action(current_state)

@@ -5,26 +5,22 @@ from pathlib import Path
 import numpy as np
 import pygame
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Concatenate
+from tensorflow.keras.layers import Dense
 
-from .environment import Action, Ball, Field, Player, State, actions
+from .environment import Action, Ball, Field, Player, actions
 
 
 class DQN(tf.keras.Model):
     def __init__(self):
         super(DQN, self).__init__()
-        self.x1 = Dense(512, activation="relu")
+        self.x1 = Dense(256, activation="relu")
         self.x2 = Dense(128, activation="relu")
-        self.x3 = Dense(128, activation="sigmoid")
-        self.concat = Concatenate()
         self.out = Dense(3, activation="linear")
 
     def call(self, x):
         x1 = self.x1(x)
         x2 = self.x2(x1)
-        x3 = self.x3(x2)
-        x4 = self.concat([x2, x3])
-        out = self.out(x4)
+        out = self.out(x2)
 
         return out
 
@@ -66,6 +62,12 @@ class DDQN(Agent):
         inter_q_values = tf.reduce_max(next_target_q_vals, axis=1)
         target_q = rewards + gamma * inter_q_values * (1.0 - terminal)
 
+        loss_value = self.step(loss, optimizer, states, action_indices, target_q)
+
+        return loss_value
+
+    @tf.function
+    def step(self, loss, optimizer, states, action_indices, target_q):
         with tf.GradientTape() as tape:
             # Calculate target Q value for chosen actions
             # q_values = tf.gather(self.dqn(states), action_indices, axis=1)
@@ -150,10 +152,10 @@ class SimpleAI(Agent):
         self.real_target_pos = np.zeros(2)
         self.target_pos = np.zeros(2)
 
-    def predict_intersection(self, state: State, depth=0):
+    def predict_intersection(self, state: np.ndarray, depth=0):
 
-        ball_pos = state.ball_pos.copy()
-        ball_dir = state.ball_dir.copy()
+        ball_pos = state[2:4]
+        ball_dir = state[4:6]
 
         # top and bottom wall y_pos
         vrange = np.array(
@@ -187,12 +189,12 @@ class SimpleAI(Agent):
                 ball_dir[1] = -ball_dir[1]
 
                 # Recursive call on new position
-                next_state = State(state.agent, state.opponent, ball_pos, ball_dir)
+                next_state = np.array([state[0], state[1], *ball_pos, *ball_dir])
                 return self.predict_intersection(next_state, depth=depth + 1)
         else:
             return np.array([hrange[self.target], 0.5 * vrange.sum()])
 
-    def select_action(self, state) -> Action:
+    def select_action(self, state: np.ndarray) -> Action:
         target_pos = self.predict_intersection(state)
         target_diff = target_pos - self.real_target_pos
 
@@ -202,7 +204,7 @@ class SimpleAI(Agent):
             self.target_pos = target_pos.copy()
             self.target_pos[1] -= random.random() * self.player.height
 
-        player_pos = getattr(state, self.agent)
+        player_pos = state[self.target]
         ydiff = self.target_pos[1] - player_pos
 
         if random.random() > 0.9:
@@ -251,16 +253,24 @@ class DQNModel(Agent):
         rewards = batch.rewards
         terminal = batch.terminal
 
+        # Calculate policy q value based on max Q
+        # best_next_actions = tf.argmax(self.dqn(new_states), axis=1)
+
+        next_target_q_vals = self.target_dqn(new_states)
+
+        # inter_q_values = tf.gather(next_target_q_vals, best_next_actions, axis=1)
+        inter_q_values = tf.reduce_max(next_target_q_vals, axis=1)
+        target_q = rewards + (gamma * inter_q_values * (1.0 - terminal))
+
+        loss_value = self.step(loss, optimizer, states, action_indices, target_q)
+
+        return loss_value
+
+    @tf.function
+    def step(self, loss, optimizer, states, action_indices, target_q):
         with tf.GradientTape() as tape:
             # Calculate target Q value for chosen actions
             q_values = tf.gather(self.dqn(states), action_indices, axis=1)
-
-            # Calculate policy q value based on max Q
-            # best_next_actions = tf.argmax(self.dqn(new_states), axis=1)
-            next_target_q_vals = self.target_dqn(new_states)
-            # inter_q_values = tf.gather(next_target_q_vals, best_next_actions, axis=1)
-            inter_q_values = tf.reduce_max(next_target_q_vals, axis=1)
-            target_q = rewards + (gamma * inter_q_values * (1.0 - terminal))
 
             # Calculate Huber loss
             loss_value = loss(q_values, target_q)
@@ -271,8 +281,6 @@ class DQNModel(Agent):
 
         # Update policy network
         optimizer.apply_gradients(zip(clipped_grads, self.dqn.trainable_variables))
-
-        return loss_value
 
     def select_action(self, states, eps=None) -> Action:
         if eps is not None and random.random() < eps:

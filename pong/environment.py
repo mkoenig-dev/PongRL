@@ -1,4 +1,3 @@
-from copy import deepcopy
 import random
 from collections import namedtuple
 from dataclasses import dataclass
@@ -250,13 +249,6 @@ def intersect(ball: Ball, player: Player):
     return collision_info
 
 
-def state2vec(state, target=0) -> np.ndarray:
-    if target == 0:
-        return np.array([state.agent, state.opponent, *state.ball_pos, *state.ball_dir])
-    elif target == 1:
-        return np.array([state.opponent, state.agent, *state.ball_pos, *state.ball_dir])
-
-
 class Environment:
     def __init__(self, field: Field):
         self.field = field
@@ -298,7 +290,13 @@ class Environment:
         self.states = [self.state]
 
     def observe(self, i=-1) -> State:
-        return deepcopy(State(*list(self.states[i].values())[:4]))
+        return self.state2vec(State(*list(self.states[i].values())[:4]))
+
+    def state2vec(self, state):
+        return np.array(
+            [state.agent, state.opponent, *state.ball_pos, *state.ball_dir],
+            dtype="float32",
+        )
 
     def update_state(self, game_state, reward1, reward2):
         self.state = {
@@ -353,7 +351,7 @@ class Environment:
 
         return r1, r2
 
-    def act(self, action1: Action, action2: Action) -> Transition:
+    def act(self, action1: Action, action2: Action) -> Tuple:
 
         # Update player positions and clip
         self.p1.update(action1, self.field)
@@ -373,7 +371,7 @@ class Environment:
         # Update environment state
         self.update_state(game_state, reward1, reward2)
 
-        return Transition(
+        return (
             self.observe(-2),
             action1,
             action2,
@@ -382,3 +380,24 @@ class Environment:
             reward2,
             game_state != GameState.PLAYING,
         )
+
+
+def state2vec(state: State, env: Environment, target=0) -> np.ndarray:
+    if target == 0:
+        arr = np.array([state.agent, state.opponent, *state.ball_pos, *state.ball_dir])
+    elif target == 1:
+        arr = np.array([state.opponent, state.agent, *state.ball_pos, *state.ball_dir])
+
+    # # Scale player pos
+    # arr[0] = 2.0 * (arr[0] / env.field.height) - 1.0
+    # arr[1] = 2.0 * (arr[1] / env.field.height) - 1.0
+
+    # # Scale ball pos
+    # arr[2] = 2.0 * (arr[2] / env.field.width) - 1.0
+    # arr[3] = 2.0 * (arr[3] / env.field.height) - 1.0
+
+    # # Scale ball vel
+    # arr[4] = 2.0 * (arr[4] / env.ball.ball_speed) - 1.0
+    # arr[5] = 2.0 * (arr[5] / env.ball.ball_speed) - 1.0
+
+    return arr
