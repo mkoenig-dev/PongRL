@@ -82,14 +82,14 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     ai_agent = SimpleAI(env.field, env.ball, env.p2)
 
     # Initialize training renderer
-    renderer = Renderer(800, 400, env)
+    # renderer = Renderer(800, 400, env)
 
     # Training optimizer and loss
 
     loss = tf.keras.losses.MeanSquaredError()
     optimizer = tf.keras.optimizers.Adam(1e-3)
 
-    agent.dqn.compile(loss=loss, optimizer=optimizer)
+    agent.compile(loss=loss, optimizer=optimizer)
 
     # Random exploration
     eps_start = 0.2
@@ -102,7 +102,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
         for e in t:
 
-            renderer.events()
+            # renderer.events()
 
             # get epsilon greedy value
             eps = epsilon_decay(e, episodes, eps_start, eps_end, warm_up=e < 200)
@@ -116,7 +116,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
             action2 = ai_agent.select_action(current_state)
 
-            state, action1, action2, next_state, reward1, reward2, terminal = env.act(
+            state, action1, action2, next_state, reward1, reward2, terminal = env.step(
                 action1, action2
             )
 
@@ -125,7 +125,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
             buffer.push(state, action1, action2, next_state, reward1, reward2, terminal)
 
             # Render current scene
-            renderer.render()
+            # renderer.render()
 
             # Start training here
             if len(buffer) >= batch_size:
@@ -135,7 +135,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                 batch = repack_batch(raw_batch, batch_size)
 
                 # Update step for both agents
-                loss_val = agent.optimize(loss, optimizer, batch, gamma)
+                loss_val = agent.optimize(batch, gamma)
                 loss_values.append(loss_val)
 
                 t.set_postfix(loss=np.mean(loss_values), total_reward=cumulated_reward)
@@ -146,20 +146,20 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
                 # Save networks
                 if e % 5000 == 0 and e > 0:
-                    agent.save("models/dqn")
+                    agent.save("models/dqn_test213")
 
                 if len(loss_values) > 500:
                     loss_values.clear()
 
-    renderer.quit()
+    # renderer.quit()
 
 
 if __name__ == "__main__":
     episodes = 1000000
     mem_size = 800000
     batch_size = 512
-    num_freezes = 1
+    num_freezes = 3000
     gamma = 0.99
-    tau = 0.99
+    tau = 0.0
 
     train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size)

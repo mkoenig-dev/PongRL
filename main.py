@@ -3,7 +3,7 @@ import random
 import numpy as np
 
 from pong.agent import DDQN, DQN, SimpleAI, UserAgent
-from pong.environment import Environment, Field, state2vec
+from pong.environment import Environment, Field
 from pong.renderer import Renderer
 
 input_shape = 4
@@ -18,7 +18,7 @@ user_agent = UserAgent()
 simple_agent = SimpleAI(field, env.ball, env.p2)
 
 try:
-    ai_agent1 = DDQN.load("models/ddqn_res")
+    ai_agent1 = DDQN.load("models/dqn")
     ai_agent2 = DDQN.load("models/ddqn2_new")
 except OSError:
     ai_agent1 = DDQN(DQN(), DQN())
@@ -51,7 +51,7 @@ while not renderer.game_over:
     # action2 = ai_agent2.select_action(input_tensor2)
     action2 = simple_agent.select_action(current_state)
 
-    env.act(action, action2)
+    env.step(action, action2)
 
     renderer.render(120)
 

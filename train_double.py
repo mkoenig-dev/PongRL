@@ -71,16 +71,8 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     policy2 = DQN()
     policy2.build((None, 6))
 
-    target1 = DQN()
-    target1.build((None, 6))
-    target1.set_weights(policy1.get_weights())
-
-    target2 = DQN()
-    target2.build((None, 6))
-    target2.set_weights(policy2.get_weights())
-
-    agent1 = DDQN(policy1, target1)
-    agent2 = DDQN(policy2, target2)
+    agent1 = DDQN(policy1)
+    agent2 = DDQN(policy2)
 
     env = Environment(Field())
 
@@ -94,8 +86,8 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     optimizer1 = tf.keras.optimizers.Adam(0.000025)
     optimizer2 = tf.keras.optimizers.Adam(0.000025)
 
-    agent1.dqn.compile(loss=loss1, optimizer=optimizer1)
-    agent2.dqn.compile(loss=loss2, optimizer=optimizer2)
+    agent1.compile(loss=loss1, optimizer=optimizer1)
+    agent2.compile(loss=loss2, optimizer=optimizer2)
 
     # Random exploration
     eps_start = 0.1
@@ -126,7 +118,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                 state2vec(current_state, target=1)[np.newaxis], eps=eps
             )
 
-            transition = env.act(action1, action2)
+            transition = env.step(action1, action2)
 
             cumulated_reward += transition.reward1 + transition.reward2
 
@@ -144,8 +136,8 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                 batch2 = repack_batch(raw_batch, batch_size, target=1)
 
                 # Update step for both agents
-                loss_val1 = agent1.optimize(loss1, optimizer1, batch1, gamma)
-                loss_val2 = agent2.optimize(loss2, optimizer2, batch2, gamma)
+                loss_val1 = agent1.optimize(batch1, gamma)
+                loss_val2 = agent2.optimize(batch2, gamma)
 
                 loss_values.append(loss_val1)
                 loss_values.append(loss_val2)
