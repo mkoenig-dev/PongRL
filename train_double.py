@@ -1,5 +1,3 @@
-import random
-from collections import deque
 from functools import partial
 from operator import attrgetter
 
@@ -7,32 +5,9 @@ import numpy as np
 import tensorflow as tf
 from tqdm import trange
 
-from pong.agent import DDQN, DQN
+from pong.agent import DDQN, QModel, ReplayBuffer, epsilon_decay
 from pong.environment import Batch, Environment, Field, Transition, state2vec
-
-# from pong.renderer import Renderer
-
-
-class ReplayBuffer(object):
-    def __init__(self, mem_size):
-        self.mem_size = mem_size
-        self.memory = deque([], mem_size)
-
-    def push(self, *args):
-        self.memory.append(Transition(*args))
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-
-
-def epsilon_decay(e, num_episodes, eps_start, eps_end, warm_up=False):
-    if warm_up:
-        return 0.0
-    else:
-        return (eps_end - eps_start) * ((e + 1) / num_episodes) + eps_start
+from pong.renderer import Renderer
 
 
 def repack_batch(batch, batch_size, target=0):
@@ -65,11 +40,8 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
     # Define actors per player
-    policy1 = DQN()
-    policy1.build((None, 6))
-
-    policy2 = DQN()
-    policy2.build((None, 6))
+    policy1 = QModel((None, 6))
+    policy2 = QModel((None, 6))
 
     agent1 = DDQN(policy1)
     agent2 = DDQN(policy2)
@@ -77,7 +49,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     env = Environment(Field())
 
     # Initialize training renderer
-    # renderer = Renderer(800, 400, env)
+    renderer = Renderer(800, 400, env)
 
     # Training optimizer and loss
 
@@ -100,7 +72,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
         for e in t:
 
-            # renderer.events()
+            renderer.events()
 
             # get epsilon greedy value
             eps = epsilon_decay(e, episodes, eps_start, eps_end, warm_up=e < 1000)
@@ -125,7 +97,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
             buffer.push(*transition)
 
             # Render current scene
-            # renderer.render()
+            renderer.render()
 
             # Start training here
             if len(buffer) >= batch_size:
@@ -157,7 +129,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                 if len(loss_values) > 500:
                     loss_values.clear()
 
-    # renderer.quit()
+    renderer.quit()
 
 
 if __name__ == "__main__":

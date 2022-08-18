@@ -1,40 +1,12 @@
-import random
-from collections import deque
 from operator import attrgetter
 
 import numpy as np
 import tensorflow as tf
 from tqdm import trange
 
-from pong.agent import DDQN, DQN, SimpleAI
+from pong.agent import DDQN, QModel, ReplayBuffer, SimpleAI, epsilon_decay
 from pong.environment import Batch, Environment, Field, Transition
 from pong.renderer import Renderer
-
-
-class ReplayBuffer(object):
-    def __init__(self, mem_size):
-        self.mem_size = mem_size
-        self.memory = deque([], mem_size)
-
-    def push(self, *args):
-        self.memory.append(Transition(*args))
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-
-
-def epsilon_decay(e, num_episodes, eps_start, eps_end, warm_up=False):
-    if warm_up:
-        return 0.0
-    else:
-        return np.clip(
-            (eps_end - eps_start) * ((e + 1) / num_episodes) + eps_start,
-            eps_start,
-            eps_end,
-        )
 
 
 def repack_batch(batch, batch_size):
@@ -65,28 +37,23 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
     try:
-        agent = DDQN.load("models/dqn")
+        agent = DDQN.load("models/does_not_exist")
     except OSError:
         # Define actors per player
-        policy = DQN()
-        policy.build((None, 6))
+        policy = QModel((None, 6))
 
-        target = DQN()
-        target.build((None, 6))
-        target.set_weights(policy.get_weights())
-
-        agent = DDQN(policy, target)
+        agent = DDQN(policy)
 
     env = Environment(Field())
 
-    ai_agent = SimpleAI(env.field, env.ball, env.p2)
+    ai_agent = SimpleAI(env, 1)
 
     # Initialize training renderer
-    # renderer = Renderer(800, 400, env)
+    renderer = Renderer(800, 400, env)
 
     # Training optimizer and loss
 
-    loss = tf.keras.losses.MeanSquaredError()
+    loss = tf.keras.losses.Huber()
     optimizer = tf.keras.optimizers.Adam(1e-3)
 
     agent.compile(loss=loss, optimizer=optimizer)
@@ -102,7 +69,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
         for e in t:
 
-            # renderer.events()
+            renderer.events()
 
             # get epsilon greedy value
             eps = epsilon_decay(e, episodes, eps_start, eps_end, warm_up=e < 200)
@@ -125,7 +92,7 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
             buffer.push(state, action1, action2, next_state, reward1, reward2, terminal)
 
             # Render current scene
-            # renderer.render()
+            renderer.render()
 
             # Start training here
             if len(buffer) >= batch_size:
@@ -138,7 +105,9 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
                 loss_val = agent.optimize(batch, gamma)
                 loss_values.append(loss_val)
 
-                t.set_postfix(loss=np.mean(loss_values), total_reward=cumulated_reward)
+                t.set_postfix(
+                    loss=np.mean(loss_values), total_reward=cumulated_reward, eps=eps
+                )
 
                 # Update target Q network and save models every num_freezes epochs
                 if e % num_freezes == 0:
@@ -146,20 +115,20 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
                 # Save networks
                 if e % 5000 == 0 and e > 0:
-                    agent.save("models/dqn_test213")
+                    agent.save("models/ddqn")
 
                 if len(loss_values) > 500:
                     loss_values.clear()
 
-    # renderer.quit()
+    renderer.quit()
 
 
 if __name__ == "__main__":
     episodes = 1000000
-    mem_size = 800000
-    batch_size = 512
-    num_freezes = 3000
-    gamma = 0.99
-    tau = 0.0
+    mem_size = 300000
+    batch_size = 256
+    num_freezes = 1
+    gamma = 0.98
+    tau = 0.99
 
     train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size)

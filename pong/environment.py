@@ -30,16 +30,16 @@ class Action(Enum):
     UP = 1
 
 
-actions = [Action.DOWN, Action.STILL, Action.UP]  # action space
+ACTION_SPACE = [Action.DOWN, Action.STILL, Action.UP]  # action space
 
 
 class Reward(Enum):
     """Defines rewards for the pong environment"""
 
-    SCORED = 5
+    SCORED = 2
     HIT = 1
     PLAYING = 0
-    RECEIVED = -1
+    RECEIVED = -2
 
 
 @dataclass
@@ -292,12 +292,12 @@ def intersect_disc(ball: Ball, line: Tuple[NDArray, NDArray]) -> Optional[NDArra
         distance(perp, line[0]) + distance(perp, line[1])
     ) == distance(line[0], line[1]):
         return perp
-    elif distance2(ball.pos, line[0]) < ball.radius**2:
+    if distance2(ball.pos, line[0]) < ball.radius**2:
         return line[0]
-    elif distance2(ball.pos, line[1]) < ball.radius**2:
+    if distance2(ball.pos, line[1]) < ball.radius**2:
         return line[1]
-    else:
-        return None
+
+    return None
 
 
 def intersect(ball: Ball, player: Player) -> CollisionInfo:
@@ -340,7 +340,7 @@ def intersect(ball: Ball, player: Player) -> CollisionInfo:
     info = (inter_left, inter_right, inter_bottom, inter_top)
 
     collision_info = CollisionInfo(
-        any([pnt is not None for pnt in info]) or pir,
+        any(pnt is not None for pnt in info) or pir,
         rel_inter_left,
         rel_inter_right,
         inter_bottom,
@@ -410,9 +410,9 @@ class Environment:
         Returns:
             NDArray: state at frame i.
         """
-        return self.state2vec(State(*list(self.states[i].values())[:4]))
+        return self.normalize(State(*list(self.states[i].values())[:4]))
 
-    def state2vec(self, state: State) -> NDArray:
+    def normalize(self, state: State) -> NDArray:
         """Transforms state to normalized array.
 
         Args:
@@ -433,7 +433,30 @@ class Environment:
             dtype="float32",
         )
 
-    def update_state(self, game_state: GameState, reward1: float, reward2: float) -> None:
+    def denormalize(self, state: NDArray) -> NDArray:
+        """Transforms state back from normalized ranges to screen ranges.
+
+        Args:
+            state (NDArray): the normalized state
+
+        Returns:
+            NDArray: the transformed state
+        """
+        return np.array(
+            [
+                0.5 * self.field.height * (state[0] + 1.0),
+                0.5 * self.field.height * (state[1] + 1.0),
+                0.5 * self.field.width * (state[2] + 1.0),
+                0.5 * self.field.height * (state[3] + 1.0),
+                state[4] * self.ball.ball_speed,
+                state[5] * self.ball.ball_speed,
+            ],
+            dtype="float32",
+        )
+
+    def update_state(
+        self, game_state: GameState, reward1: float, reward2: float
+    ) -> None:
         """Updates the current game_state and appends to the list of states.
 
         Args:
@@ -554,7 +577,7 @@ class Environment:
 
 def state2vec(state: State, target: int = 0) -> NDArray:
     """Transforms state instance to state array. The target value determines the
-    point of view. 
+    point of view.
 
     target = 0: PoV is player 1
     target = 1: PoV is player 2
@@ -566,8 +589,13 @@ def state2vec(state: State, target: int = 0) -> NDArray:
     Returns:
         NDArray: target = 0: (p1.height, p2.height, ball position, ball direction)
           target = 1: (p2.height, p1.height, ball position, ball direction)
+
+    Raises:
+        ValueError: if target is not in (0, 1).
     """
     if target == 0:
         return np.array([state.agent, state.opponent, *state.ball_pos, *state.ball_dir])
     if target == 1:
         return np.array([state.opponent, state.agent, *state.ball_pos, *state.ball_dir])
+
+    raise ValueError(f"Passed target {target} is unsupported (choice(0, 1))")

@@ -1,33 +1,105 @@
-from pickletools import optimize
 import random
 from abc import ABC, abstractmethod
+from collections import deque
 from copy import copy
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import numpy.random as npr
 import pygame
 import tensorflow as tf
-from numpy.typing import NDArray
-from tensorflow.keras.layers import Dense
+from numpy.typing import ArrayLike, NDArray
+from tensorflow.keras.layers import Dense, InputLayer
 from tensorflow.keras.models import Model
 
-from .environment import Action, Ball, Batch, Field, Player, actions
+from .environment import ACTION_SPACE, Action, Batch, Environment, Transition
 
 
-class DQN(tf.keras.Model):
-    def __init__(self):
-        """Simple multilayer perceptron implementation for policy/target network"""
-        super(DQN, self).__init__()
+class ReplayBuffer:
+    def __init__(self, size: int):
+        """A replay buffer for experience replay training.
+
+        Args:
+            size (int): maximum length of the buffer, i.e. samples to store.
+        """
+        self.size = size
+        self.memory = deque([], size)
+
+    def push(self, *args) -> None:
+        """Store an experience tuple as a transition.
+        The arguments are converted to a transition.
+
+        Args:
+            *args: state, action1, action2, new_state, reward1, reward2, terminal
+        """
+        self.memory.append(Transition(*args))
+
+    def sample(self, batch_size: int) -> List[Transition]:
+        """Randomly sample a minibatch of transitions.
+
+        Args:
+            batch_size (int): minibatch size (smaller than len)
+
+        Returns:
+            List[Transition]: new list of sampled transitions
+        """
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self) -> int:
+        """Returns the number of experiences stored in the buffer."""
+        return len(self.memory)
+
+
+def epsilon_decay(
+    e: int, num_episodes: int, eps_start: int, eps_end: int, warm_up: bool = False
+) -> float:
+    """Epsilon decay over episodes with warmup phase.
+
+    If warmup is specified, the decay gets ignored and epsilon is set to the highest
+    probability in a epsilon-greedy approach. Otherwise depending on the passed episode
+    epsilon is interpolated in [0, num_episodes] to the range (eps_start, eps_end).
+
+    Interpolated epsilon is clipped before return, so e > num_episodes returns eps_end.
+
+    Args:
+        e (int): current episode
+        num_episodes (int): number of episodes to decay to eps_end
+        eps_start (int): starting epsilon
+        eps_end (int): epsilon at the end of the decay
+        warm_up (bool, optional): 100% random action if True. Defaults to False.
+
+    Returns:
+        float: _description_
+    """
+    if warm_up:
+        return 0.0
+
+    return np.clip(
+        (eps_end - eps_start) * (e / (num_episodes - 1)) + eps_start,
+        eps_start,
+        eps_end,
+    )
+
+
+class QModel(Model):
+    def __init__(self, shape: ArrayLike):
+        """Simple multilayer perceptron implementation for policy/target network.
+
+        Args:
+            shape (ArrayLike): input shape
+        """
+        super().__init__()
+        self.input_layer = InputLayer(shape)
         self.x1 = Dense(256, activation="relu")
         self.x2 = Dense(128, activation="relu")
         self.out = Dense(3, activation="linear")
 
-    def call(self, x):
-        x1 = self.x1(x)
-        x2 = self.x2(x1)
-        out = self.out(x2)
+    def call(self, inputs):
+        x = self.input_layer(inputs)
+        x = self.x1(x)
+        x = self.x2(x)
+        out = self.out(x)
 
         return out
 
@@ -43,7 +115,6 @@ class Agent(ABC):
         Returns:
             Action: the action selected by the agent
         """
-        pass
 
 
 class EpsilonGreedyAgent(Agent):
@@ -55,28 +126,28 @@ class EpsilonGreedyAgent(Agent):
         """
         self.actor = actor
 
-    def select_action(self, states: NDArray, eps: Optional[float] = None) -> Action:
+    def select_action(self, state: NDArray, eps: Optional[float] = None) -> Action:
         """Select action based on epsilon-greedy policy.
 
         Args:
-            states (NDArray): the passed state
+            state (NDArray): the passed state
             eps (float, optional): Probability for random action. Defaults to None.
 
         Returns:
             Action: the action selected by the agent
         """
         if eps is not None and random.random() > eps:
-            return random.choice(actions)
+            return random.choice(ACTION_SPACE)
 
-        q_approx = self.actor(states)
+        q_approx = self.actor(state)
         i = np.argmax(q_approx)
 
-        return actions[i]
+        return ACTION_SPACE[i]
 
 
 class DDQN(Agent):
     def __init__(self, model: Model) -> None:
-        """Dual Deep Q-Network implementation.
+        """Double Deep Q-Network implementation.
 
         Args:
             model (Model): the initial policy/target model
@@ -91,11 +162,9 @@ class DDQN(Agent):
         self.loss = loss
 
     def optimize(self, batch: Batch, gamma: float) -> float:
-        """Trains policy network in one step on a minibatch.
+        """Trains policy network in one step on a minibatch using a Double DQN update.
 
         Args:
-            loss (Any): loss function for target q update
-            optimizer (Any): optimizer
             batch (Batch): minibatch with states, actions, next_states, rewards and
               terminal booleans
             gamma (float): discount factor
@@ -111,72 +180,83 @@ class DDQN(Agent):
         actions = batch.actions_indices
         next_states = batch.new_states
         rewards = batch.rewards
-        terminal = batch.terminal
+        terminals = batch.terminal
 
-        next_target_q_vals = self.target(next_states)
-        inter_q_values = tf.reduce_max(next_target_q_vals, axis=1)
-        target_q = rewards + gamma * inter_q_values * (1.0 - terminal)
-
-        loss_value = self.step(self.loss, self.optimizer, states, actions, target_q)
+        loss_value = self._step(states, actions, next_states, rewards, terminals, gamma)
 
         return loss_value
 
     @tf.function
-    def step(self, loss, optimizer, states, actions, target_q) -> float:
+    def _step(
+        self,
+        states: Any,
+        actions: Any,
+        next_states: Any,
+        rewards: Any,
+        terminals: Any,
+        gamma: float,
+    ) -> float:
         """Optimization step for policy update. Outsourced to its own function
         to make use of tensorflow autograph features.
 
         Args:
-            loss (Any): loss function for target q update
-            optimizer (Any): optimizer
-            states (Any): minibatch states
-            actions (Any): minibatch actions
-            target_q (Any): target Q-value
+            states (Any): transition states
+            actions (Any): transition actions
+            next_states (Any): transition next states
+            rewards (Any): transition rewards
+            terminals (Any): transition dones
+            gamma (float): discount factor
 
         Returns:
             float: loss value of the minibatch prediction.
         """
         with tf.GradientTape() as tape:
             # Calculate target Q value for chosen actions
-            # q_values = tf.gather(self.dqn(states), action_indices, axis=1)
+
             q_values = tf.math.reduce_sum(
                 self.policy(states) * tf.one_hot(actions, 3), axis=1
             )
 
-            # Calculate policy q value based on max Q
-            # best_next_actions = tf.argmax(self.dqn(new_states), axis=1)
+            next_q_vals = self.policy(next_states)
+            next_actions = tf.argmax(next_q_vals, axis=1)
 
-            # inter_q_values = tf.gather(next_target_q_vals, best_next_actions, axis=1)
+            future_q = tf.math.reduce_sum(
+                self.target(next_states) * tf.one_hot(next_actions, 3), axis=1
+            )
+
+            target_q = rewards + gamma * future_q * (1.0 - terminals)
 
             # Calculate Huber loss
-            loss_value = loss(q_values, target_q)
+            loss_value = self.loss(q_values, target_q)
 
         # Get gradients w.r.t. weights
         grads = tape.gradient(loss_value, self.policy.trainable_variables)
         clipped_grads = [tf.clip_by_value(grad, -1.0, 1.0) for grad in grads]
 
         # Update policy network
-        optimizer.apply_gradients(zip(clipped_grads, self.policy.trainable_variables))
+        self.optimizer.apply_gradients(
+            zip(clipped_grads, self.policy.trainable_variables)
+        )
 
         return loss_value
 
-    def select_action(self, states: NDArray, eps: Optional[float] = None) -> Action:
+    def select_action(self, state: NDArray, eps: Optional[float] = None) -> Action:
         """Select action based on epsilon-greedy policy.
 
         Args:
-            states (NDArray): the passed state
+            state (NDArray): the passed state
             eps (float, optional): Probability for random action. Defaults to None.
 
         Returns:
             Action: the action selected by the agent
         """
         if eps is not None and random.random() > eps:
-            return random.choice(actions)
+            return random.choice(ACTION_SPACE)
 
-        q_approx = self.policy(states)
+        q_approx = self.policy(state)
         i = tf.squeeze(tf.argmax(q_approx, axis=1))
 
-        return actions[i]
+        return ACTION_SPACE[i]
 
     def update_target(self, tau: float = 0.0):
         """Updates target network softly by linear interpolation weighted by tau.
@@ -218,8 +298,8 @@ class DDQN(Agent):
         try:
             self.policy.save(path / "dqn")
             self.target.save(path / "target")
-        except Exception:
-            raise RuntimeError(f"Could not save model to {path}")
+        except Exception as exc:
+            raise RuntimeError(f"Could not save model to {path}") from exc
 
     def load(path: str) -> "DDQN":
         """Loads saved DDQN from specified model folder.
@@ -249,26 +329,26 @@ class DDQN(Agent):
                 ddqn.target = target
 
                 return ddqn
-            except Exception:
-                raise RuntimeError(f"Unable to load DDQN from {path}")
+            except Exception as exc:
+                raise RuntimeError(f"Unable to load DDQN from {path}") from exc
         else:
             raise OSError("One of the paths for loading does not exist.")
 
 
 class SimpleAI(Agent):
-    def __init__(self, field: Field, ball: Ball, player: Player) -> None:
+    def __init__(self, env: Environment, target: int = 0) -> None:
         """Simple Pong AI that predicts intersections of the ball on the goal plane.
 
         Args:
-            field (Field): pong field
-            ball (Ball): pong ball
-            player (Player): the player to control
+            env (Environment): pong environment
+            target (int): the player to control (p1 = 0, p2 = 1)
         """
-        self.field = field
-        self.ball = ball
-        self.player = player
-        self.target = int(player.pos_x > self.field.origin[0] + 0.5 * self.field.width)
-        self.agent = "agent" if self.target == 0 else "opponent"
+        self.env = env
+        self.field = env.field
+        self.ball = env.ball
+        self.target = target
+        self.player = env.p1 if target == 0 else env.p2
+        self.agent = "agent" if target == 0 else "opponent"
         self.last_action = Action.STILL
         self.real_target_pos = np.zeros(2)
         self.target_pos = np.zeros(2)
@@ -316,41 +396,19 @@ class SimpleAI(Agent):
         if xsteps > 0 and depth < 5:
             if ysteps > xsteps:
                 return ball_pos + self.field.speed * ball_dir * xsteps
-            else:
 
-                ball_pos += self.field.speed * ball_dir * ysteps
-                ball_dir[1] = -ball_dir[1]
+            ball_pos += self.field.speed * ball_dir * ysteps
+            ball_dir[1] = -ball_dir[1]
 
-                # Recursive call on new position
-                next_state = np.array([state[0], state[1], *ball_pos, *ball_dir])
-                return self.predict_intersection(next_state, depth=depth + 1)
-        else:
-            return np.array([hrange[self.target], 0.5 * vrange.sum()])
+            # Recursive call on new position
+            next_state = np.array([state[0], state[1], *ball_pos, *ball_dir])
+            return self.predict_intersection(next_state, depth=depth + 1)
 
-    def transform_state(self, state: NDArray) -> NDArray:
-        """Transforms state back from normalized ranges to screen ranges.
-
-        Args:
-            state (NDArray): the normalized state
-
-        Returns:
-            NDArray: the transformed state
-        """
-        return np.array(
-            [
-                0.5 * self.field.height * (state[0] + 1.0),
-                0.5 * self.field.height * (state[1] + 1.0),
-                0.5 * self.field.width * (state[2] + 1.0),
-                0.5 * self.field.height * (state[3] + 1.0),
-                state[4] * self.ball.ball_speed,
-                state[5] * self.ball.ball_speed,
-            ],
-            dtype="float32",
-        )
+        return np.array([hrange[self.target], 0.5 * vrange.sum()])
 
     def select_action(self, state: NDArray) -> Action:
 
-        state_t = self.transform_state(state)
+        state_t = self.env.denormalize(state)
 
         # Calculate player's target position
 
@@ -394,7 +452,7 @@ class UserAgent(Agent):
         """Agent based on user input"""
         self.action = Action.STILL
 
-    def select_action(self, state, event=None) -> Action:
+    def select_action(self, state: Optional[NDArray], event=None) -> Action:
         if event is not None:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
@@ -464,7 +522,7 @@ class DDPG(Agent):
         """Select action based on epsilon-greedy policy.
 
         Args:
-            states (NDArray): the passed state
+            state (NDArray): the passed state
             noise (float, optional): Scaling of the OU noise contribution.
               Defaults to 0.0.
 

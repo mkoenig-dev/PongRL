@@ -1,4 +1,5 @@
 from typing import Optional
+
 import pygame
 
 from pong.agent import UserAgent
@@ -11,7 +12,7 @@ black = (0, 0, 0)
 red = (255, 0, 0)
 
 
-class Renderer(object):
+class Renderer:
     def __init__(self, screen_width: int, screen_height: int, env: Environment) -> None:
         """PyGame renderer for the pong environment.
 
@@ -112,7 +113,7 @@ class Renderer(object):
 
     def events(self, user_control: bool = False) -> Optional[Action]:
         """Event handling for user interactions.
-        
+
         If user_control is set to True, user inputs get returned as actions.
 
         Args:
