@@ -4,12 +4,12 @@ import sys
 import numpy as np
 import tensorflow as tf
 
-from pong.agent import DDQN, QModel, SimpleAI, UserAgent
+from pong.agent import DDPG, DDQN, QModel, SimpleAI, UserAgent
 from pong.environment import Environment, Field
 from pong.renderer import Renderer
 
 SEED = 121234129
-USER_CONTROL = True
+USER_CONTROL = False
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -25,7 +25,7 @@ user_agent = UserAgent()
 simple_agent = SimpleAI(env, 1)
 
 try:
-    ai_agent1 = DDQN.load("models/ddqn")
+    ai_agent1 = DDPG.load("models/ddpg")
     ai_agent2 = DDQN.load("models/ddqn2_new")
 except OSError:
     ai_agent1 = DDQN(QModel((None, 6)))

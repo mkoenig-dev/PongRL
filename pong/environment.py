@@ -13,9 +13,7 @@ Transition = namedtuple(
     ("state", "action1", "action2", "new_state", "reward1", "reward2", "terminal"),
 )
 
-Batch = namedtuple(
-    "Batch", ("states", "actions_indices", "new_states", "rewards", "terminal")
-)
+Batch = namedtuple("Batch", ("state", "action", "next_state", "reward", "done"))
 
 CollisionInfo = namedtuple(
     "CollisionInfo", ("collision", "left", "right", "bottom", "top")

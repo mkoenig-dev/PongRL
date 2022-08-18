@@ -176,11 +176,11 @@ class DDQN(Agent):
             raise ValueError("Please compile the agent before training.")
 
         # Unpack batch
-        states = batch.states
-        actions = batch.actions_indices
-        next_states = batch.new_states
-        rewards = batch.rewards
-        terminals = batch.terminal
+        states = batch.state
+        actions = batch.action
+        next_states = batch.next_state
+        rewards = batch.reward
+        terminals = batch.done
 
         loss_value = self._step(states, actions, next_states, rewards, terminals, gamma)
 
@@ -518,6 +518,11 @@ class DDPG(Agent):
         self.t_critique = copy(critique)
         self.noise = OUNoise(1)
 
+    def compile(self, loss: Any, opt_actor: Any, opt_critique: Any) -> None:
+        self.loss = loss
+        self.opt_actor = opt_actor
+        self.opt_critique = opt_critique
+
     def select_action(self, state: ArrayLike, noise: float = 0.0) -> float:
         """Select action based on epsilon-greedy policy.
 
@@ -532,9 +537,7 @@ class DDPG(Agent):
         action = self.actor(state) + self.noise.sample() * noise
         return action
 
-    def optimize(
-        self, loss: Any, opt1: Any, opt2: Any, batch: Batch, gamma: float
-    ) -> float:
+    def optimize(self, batch: Batch, gamma: float) -> float:
         """Train actor and critique network one-step on a minibatch.
 
         The optimization step follows the reference DDPG algorithm, i.e. the actor loss
@@ -562,12 +565,12 @@ class DDPG(Agent):
         next_q = self.t_critique([next_states, next_action])
 
         target_q = rewards + gamma * (1.0 - terminals) * next_q
-        loss_val = self.train_step(loss, opt1, opt2, states, actions, target_q)
+        loss_val = self._step(states, actions, target_q)
 
-        return loss_val
+        return loss_val.numpy()
 
     @tf.function
-    def train_step(self, loss, opt1, opt2, states, actions, target_q) -> float:
+    def _step(self, states, actions, target_q) -> float:
         # actor loss calculation and update
         with tf.GradientTape() as tape:
             action_preds = self.actor(states)
@@ -577,18 +580,21 @@ class DDPG(Agent):
             actor_loss = -tf.math.reduce_mean(qa_vals)
 
         a_grads = tape.gradient(actor_loss, self.actor.trainable_variables)
-        opt1.apply_gradients(zip(a_grads, self.actor.trainable_variables))
+        self.opt_actor.apply_gradients(zip(a_grads, self.actor.trainable_variables))
 
         # critique loss calculation and update
         with tf.GradientTape() as tape:
             q_vals = self.critique((states, actions))
 
-            loss_val = loss(target_q, q_vals)
+            loss_val = self.loss(target_q, q_vals)
 
         c_grads = tape.gradient(loss_val, self.critique.trainable_variables)
-        opt2.apply_gradients(zip(c_grads, self.critique.trainable_variables))
 
-        return loss_val.numpy()
+        self.opt_critique.apply_gradients(
+            zip(c_grads, self.critique.trainable_variables)
+        )
+
+        return loss_val
 
     def update_targets(self, tau: float = 0.999) -> None:
         """Soft weight update for the target actor and critique networks. The update
@@ -617,3 +623,67 @@ class DDPG(Agent):
                 )
             ]
         )
+
+    def save(self, path: str):
+        """Saves ddpg model to file using tf-model saving.
+        Will create two folders named "dqn" and "target" in path.
+
+        Args:
+            path (str): path to the saved model files
+
+        Raises:
+            RuntimeError: If models could not be saved
+        """
+        path = Path(path)
+
+        if not path.exists():
+            path.mkdir()
+
+        try:
+            self.actor.save(path / "actor")
+            self.t_actor.save(path / "target_actor")
+            self.critique.save(path / "critique")
+            self.t_critique.save(path / "target_critique")
+        except Exception as exc:
+            raise RuntimeError(f"Could not save model to {path}") from exc
+
+    def load(path: str) -> "DDPG":
+        """Loads saved DDPG from specified model folder.
+        Path must have two sub folders named "actor" and "critique" containing the model
+        files.
+
+        Args:
+            path (str): saved model directory
+
+        Raises:
+            RuntimeError: If DDPG could not be loaded
+            OSError: If one of the sub model files do not exist
+
+        Returns:
+            DDPG: new instance created from the loaded models
+        """
+        load_path = Path(path)
+        actor_path = load_path / "actor"
+        t_actor_path = load_path / "target_actor"
+        critique_path = load_path / "critique"
+        t_critique_path = load_path / "target_critique"
+
+        paths = [actor_path, t_actor_path, critique_path, t_critique_path]
+
+        if load_path.exists() and all(path_.exists() for path_ in paths):
+            try:
+                actor = tf.keras.models.load_model(actor_path)
+                critique = tf.keras.models.load_model(critique_path)
+
+                t_actor = tf.keras.models.load_model(t_actor_path)
+                t_critique = tf.keras.models.load_model(t_critique_path)
+
+                ddpg = DDPG(actor, critique)
+                ddpg.t_actor = t_actor
+                ddpg.t_critique = t_critique
+
+                return ddpg
+            except Exception as exc:
+                raise RuntimeError(f"Unable to load DDPG from {path}") from exc
+        else:
+            raise OSError("One of the paths for loading does not exist.")

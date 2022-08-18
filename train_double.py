@@ -1,5 +1,6 @@
 from functools import partial
 from operator import attrgetter
+from typing import Any
 
 import numpy as np
 import tensorflow as tf
@@ -10,7 +11,7 @@ from pong.environment import Batch, Environment, Field, Transition, state2vec
 from pong.renderer import Renderer
 
 
-def repack_batch(batch, batch_size, target=0):
+def repack_batch(batch: Any, batch_size: int, target: int = 0) -> Batch:
     # target = 0: player 1
     # target = 1: player 2
 
@@ -36,7 +37,7 @@ def repack_batch(batch, batch_size, target=0):
     )
 
 
-def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
+def train_ddqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
     # Define actors per player
@@ -133,11 +134,11 @@ def train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
 
 if __name__ == "__main__":
-    episodes = 1000000
-    mem_size = 100000
-    batch_size = 512
-    num_freezes = 1
-    gamma = 0.99
-    tau = 0.9
+    EPISODES = 1000000
+    MEM_SIZE = 100000
+    BATCH_SIZE = 512
+    NUM_FREEZES = 1
+    GAMMA = 0.98
+    TAU = 0.99
 
-    train_dqn(episodes, batch_size, gamma, tau, num_freezes, mem_size)
+    train_ddqn(EPISODES, BATCH_SIZE, GAMMA, TAU, NUM_FREEZES, MEM_SIZE)
