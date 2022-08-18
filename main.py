@@ -9,7 +9,7 @@ from pong.environment import Environment, Field
 from pong.renderer import Renderer
 
 SEED = 121234129
-USER_CONTROL = False
+USER_CONTROL = True
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -25,7 +25,7 @@ user_agent = UserAgent()
 simple_agent = SimpleAI(env, 1)
 
 try:
-    ai_agent1 = DDQN.load("models/dqn")
+    ai_agent1 = DDQN.load("models/ddqn")
     ai_agent2 = DDQN.load("models/ddqn2_new")
 except OSError:
     ai_agent1 = DDQN(QModel((None, 6)))
@@ -33,18 +33,18 @@ except OSError:
 
 
 while not renderer.game_over:
-    action = renderer.events(USER_CONTROL)
+    action2 = renderer.events(USER_CONTROL)
 
     # Transform state tuple to input tensor
     current_state = env.observe()
 
-    if not USER_CONTROL:
-        action = ai_agent1.select_action(current_state[np.newaxis])
+    action1 = ai_agent1.select_action(current_state[np.newaxis])
 
     # action2 = ai_agent2.select_action(input_tensor2)
-    action2 = simple_agent.select_action(current_state)
+    if not USER_CONTROL:
+        action2 = simple_agent.select_action(current_state)
 
-    env.step(action, action2)
+    env.step(action1, action2)
 
     renderer.render(120)
 
