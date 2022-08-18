@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional, Tuple
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike
 
 State = namedtuple("State", ("agent", "opponent", "ball_pos", "ball_dir"))
 Transition = namedtuple(
@@ -105,11 +105,11 @@ class Ball:
     ball_speed = 2.0
     kickoff_speed = 0.7
 
-    def random_dir(self) -> NDArray:
+    def random_dir(self) -> np.ndarray:
         """Calculate a random kickoff direction.
 
         Returns:
-            NDArray: the kickoff direction
+            np.ndarray: the kickoff direction
         """
         theta = 0.5 * np.random.rand(1)[0] * np.pi - np.pi * 0.25
         vel = np.array([np.cos(theta), np.sin(theta)])
@@ -226,11 +226,11 @@ class GameState(Enum):
     RECEIVED = 2
 
 
-def point_in_rectangle(point: NDArray, player: Player) -> bool:
+def point_in_rectangle(point: ArrayLike, player: Player) -> bool:
     """Calculates whether the point is inside or outside the rectangle.
 
     Args:
-        point (NDArray): 2D point
+        point (ArrayLike): 2D point
         player (Player): player for rectangle test
 
     Returns:
@@ -245,16 +245,16 @@ def point_in_rectangle(point: NDArray, player: Player) -> bool:
     ) <= vec_ad.dot(vec_ad)
 
 
-def calc_perpend(normal: NDArray, center: NDArray, point: NDArray) -> NDArray:
+def calc_perpend(normal: ArrayLike, center: ArrayLike, point: ArrayLike) -> np.ndarray:
     """Calculate the projective point onto the ray defined by center and vec.
 
     Args:
-        normal (NDArray): the normal of the line
-        center (NDArray): point on the line
-        point (NDArray): point to be projected
+        normal (ArrayLike): the normal of the line
+        center (ArrayLike): point on the line
+        point (ArrayLike): point to be projected
 
     Returns:
-        NDArray: the projected point
+        np.ndarray: the projected point
     """
 
     dist = (point - center).dot(normal)
@@ -272,15 +272,17 @@ def distance2(vec1, vec2):
     return diff.dot(diff)
 
 
-def intersect_disc(ball: Ball, line: Tuple[NDArray, NDArray]) -> Optional[NDArray]:
+def intersect_disc(
+    ball: Ball, line: Tuple[ArrayLike, ArrayLike]
+) -> Optional[np.ndarray]:
     """Calculate the intersection point of the ball with a line
 
     Args:
         ball (Ball): the pong ball
-        line (Tuple[NDArray, NDArray]): tuple of two vectors
+        line (Tuple[ArrayLike, ArrayLike]): tuple of two vectors
 
     Returns:
-        Optional[NDArray]: intersection point if there is an intersection,
+        Optional[np.ndarray]: intersection point if there is an intersection,
           otherwise None.
     """
     vec = line[0] - line[1]
@@ -401,25 +403,25 @@ class Environment:
 
         self.states = [self.state]
 
-    def observe(self, i: int = -1) -> NDArray:
+    def observe(self, i: int = -1) -> np.ndarray:
         """Returns the state of the game at frame i.
 
         Args:
             i (int, optional): state index. Defaults to -1.
 
         Returns:
-            NDArray: state at frame i.
+            np.ndarray: state at frame i.
         """
         return self.normalize(State(*list(self.states[i].values())[:4]))
 
-    def normalize(self, state: State) -> NDArray:
+    def normalize(self, state: State) -> np.ndarray:
         """Transforms state to normalized array.
 
         Args:
             state (State): the state.
 
         Returns:
-            NDArray: normalized array.
+            np.ndarray: normalized array.
         """
         return np.array(
             [
@@ -433,14 +435,14 @@ class Environment:
             dtype="float32",
         )
 
-    def denormalize(self, state: NDArray) -> NDArray:
+    def denormalize(self, state: ArrayLike) -> np.ndarray:
         """Transforms state back from normalized ranges to screen ranges.
 
         Args:
-            state (NDArray): the normalized state
+            state (ArrayLike): the normalized state
 
         Returns:
-            NDArray: the transformed state
+            np.ndarray: the transformed state
         """
         return np.array(
             [
@@ -537,10 +539,10 @@ class Environment:
             action2 (Action): action of player 2
 
         Returns:
-            state (NDArray): state before the step
+            state (np.ndarray): state before the step
             action1 (Action): action of player 1
             action2 (Action): action of player 2
-            next_state (NDArray): state after the step
+            next_state (np.ndarray): state after the step
             reward1 (float): reward of player 1
             reward2 (float): reward of player 2
             done (bool): Whether the episode is over
@@ -575,7 +577,7 @@ class Environment:
         )
 
 
-def state2vec(state: State, target: int = 0) -> NDArray:
+def state2vec(state: State, target: int = 0) -> np.ndarray:
     """Transforms state instance to state array. The target value determines the
     point of view.
 
@@ -587,7 +589,7 @@ def state2vec(state: State, target: int = 0) -> NDArray:
         target (int, optional): point of view. Defaults to 0.
 
     Returns:
-        NDArray: target = 0: (p1.height, p2.height, ball position, ball direction)
+        np.ndarray: target = 0: (p1.height, p2.height, ball position, ball direction)
           target = 1: (p2.height, p1.height, ball position, ball direction)
 
     Raises:

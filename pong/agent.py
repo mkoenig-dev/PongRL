@@ -9,7 +9,7 @@ import numpy as np
 import numpy.random as npr
 import pygame
 import tensorflow as tf
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import ArrayLike
 from tensorflow.keras.layers import Dense, InputLayer
 from tensorflow.keras.models import Model
 
@@ -106,11 +106,11 @@ class QModel(Model):
 
 class Agent(ABC):
     @abstractmethod
-    def select_action(self, state: NDArray) -> Action:
+    def select_action(self, state: ArrayLike) -> Action:
         """Select an environment action based on the passed state.
 
         Args:
-            state (NDArray): the passed state
+            state (ArrayLike): the passed state
 
         Returns:
             Action: the action selected by the agent
@@ -126,11 +126,11 @@ class EpsilonGreedyAgent(Agent):
         """
         self.actor = actor
 
-    def select_action(self, state: NDArray, eps: Optional[float] = None) -> Action:
+    def select_action(self, state: ArrayLike, eps: Optional[float] = None) -> Action:
         """Select action based on epsilon-greedy policy.
 
         Args:
-            state (NDArray): the passed state
+            state (ArrayLike): the passed state
             eps (float, optional): Probability for random action. Defaults to None.
 
         Returns:
@@ -240,11 +240,11 @@ class DDQN(Agent):
 
         return loss_value
 
-    def select_action(self, state: NDArray, eps: Optional[float] = None) -> Action:
+    def select_action(self, state: ArrayLike, eps: Optional[float] = None) -> Action:
         """Select action based on epsilon-greedy policy.
 
         Args:
-            state (NDArray): the passed state
+            state (ArrayLike): the passed state
             eps (float, optional): Probability for random action. Defaults to None.
 
         Returns:
@@ -353,17 +353,17 @@ class SimpleAI(Agent):
         self.real_target_pos = np.zeros(2)
         self.target_pos = np.zeros(2)
 
-    def predict_intersection(self, state: NDArray, depth: int = 0) -> NDArray:
+    def predict_intersection(self, state: ArrayLike, depth: int = 0) -> np.ndarray:
         """Predicts the intersection point of the ball trajectory with the AI's
         goal plane from the passed state.
 
         Args:
-            state (NDArray): the state for prediction
+            state (ArrayLike): the state for prediction
             depth (int, optional): Number of bounces to track. Defaults to 0.
 
         Returns:
-            NDArray: the intersection point if the calculation resolves in the number of
-              recursive bounce calls (depth). Otherwise the target position is the
+            np.ndarray: the intersection point if the calculation resolves in the number
+              of recursive bounce calls (depth). Otherwise the target position is the
               vertical position of the ball.
         """
 
@@ -406,7 +406,7 @@ class SimpleAI(Agent):
 
         return np.array([hrange[self.target], 0.5 * vrange.sum()])
 
-    def select_action(self, state: NDArray) -> Action:
+    def select_action(self, state: ArrayLike) -> Action:
 
         state_t = self.env.denormalize(state)
 
@@ -452,7 +452,7 @@ class UserAgent(Agent):
         """Agent based on user input"""
         self.action = Action.STILL
 
-    def select_action(self, state: Optional[NDArray], event=None) -> Action:
+    def select_action(self, state: Optional[ArrayLike], event=None) -> Action:
         if event is not None:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
@@ -518,11 +518,11 @@ class DDPG(Agent):
         self.t_critique = copy(critique)
         self.noise = OUNoise(1)
 
-    def select_action(self, state: NDArray, noise: float = 0.0) -> float:
+    def select_action(self, state: ArrayLike, noise: float = 0.0) -> float:
         """Select action based on epsilon-greedy policy.
 
         Args:
-            state (NDArray): the passed state
+            state (ArrayLike): the passed state
             noise (float, optional): Scaling of the OU noise contribution.
               Defaults to 0.0.
 
