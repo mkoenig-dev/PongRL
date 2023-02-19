@@ -19,7 +19,7 @@ class DDPGModel(Model):
         self.layer_stack = [
             tf.keras.layers.Dense(units, activation=activation)
             for units, activation in zip(
-                (32, 32, 32, 32, 1), ("tanh", "tanh", "tanh", "tanh", "tanh")
+                (16, 32, 16, 3, 1), ("relu", "relu", "relu", "relu", "tanh")
             )
         ]
 
@@ -37,18 +37,18 @@ def repack_batch(batch: Any, batch_size: int) -> Batch:
     # target = 1: player 2
 
     # values of action enum items go from -1 to 1, hence +1 for the index
-    action_batch = np.array(batch.action1, dtype="float32")
+    action_batch = np.asarray(batch.action1, dtype="float32")
 
     # Gather states from batch
-    state_batch = np.array(
+    state_batch = np.asarray(
         batch.state,
     ).reshape(batch_size, -1)
 
-    new_state_batch = np.array(batch.new_state).reshape(batch_size, -1)
+    new_state_batch = np.asarray(batch.new_state).reshape(batch_size, -1)
 
     reward_batch = batch.reward1
-    reward_batch = np.array(reward_batch, dtype="float32")
-    terminal_batch = np.array(batch.terminal, dtype="float32")
+    reward_batch = np.asarray(reward_batch, dtype="float32")
+    terminal_batch = np.asarray(batch.terminal, dtype="float32")
 
     return Batch(
         state_batch, action_batch, new_state_batch, reward_batch, terminal_batch
@@ -88,7 +88,6 @@ def train_ddpg(episodes, batch_size, gamma, tau, num_freezes, mem_size):
         cumulated_reward = 0
 
         for e in t:
-
             renderer.events()
 
             # One new step
@@ -143,11 +142,11 @@ def train_ddpg(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
 
 if __name__ == "__main__":
-    EPISODES = 100000
+    EPISODES = 2000000
     MEM_SIZE = 100000
     BATCH_SIZE = 512
     NUM_FREEZES = 1
-    GAMMA = 0.999
-    TAU = 0.999
+    GAMMA = 0.99
+    TAU = 0.998
 
     train_ddpg(EPISODES, BATCH_SIZE, GAMMA, TAU, NUM_FREEZES, MEM_SIZE)

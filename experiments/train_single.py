@@ -71,7 +71,6 @@ def train_ddqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
         cumulated_reward = 0
 
         for e in t:
-
             renderer.events()
 
             # get epsilon greedy value

@@ -45,8 +45,8 @@ class Field:
     """Defines playing field parameters"""
 
     origin = np.zeros(2)
-    width = 200.0
-    height = 100.0
+    width = 512.0
+    height = 256.0
     speed = 1.0
 
 
@@ -54,12 +54,12 @@ class Field:
 class Player:
     """Defines player parameters"""
 
-    width = 2.5
-    height = 20.0
+    width = 6
+    height = 28.0
     pos_y = 0.0
     pos_x = 0.0
     hit = False
-    player_speed = 0.7
+    player_speed = 4
 
     def reset(self, x: float, y: float):
         """Resets player to default at the kickoff.
@@ -95,12 +95,12 @@ class Ball:
 
     pos = np.zeros(2)
     vel = np.zeros(2)
-    radius = 2.0
+    radius = 4.0
     hit = 0
     wall_hit = 0
     last_touch = -1
     max_angle = np.deg2rad(55.0)
-    ball_speed = 2.0
+    ball_speed = 7.0
     kickoff_speed = 0.7
 
     def random_dir(self) -> np.ndarray:
@@ -370,11 +370,11 @@ class Environment:
     def reset(self) -> None:
         """Resets game to initial kickoff state without restarting the game"""
         self.p1.reset(
-            self.field.origin[0],
+            self.field.origin[0] + 2 * self.p1.width,
             self.field.origin[1] + 0.5 * (self.field.height - self.p1.height),
         )
         self.p2.reset(
-            self.field.origin[0] + self.field.width - self.p2.width,
+            self.field.origin[0] + self.field.width - 3 * self.p2.width,
             self.field.origin[1] + 0.5 * (self.field.height - self.p2.height),
         )
         self.ball.reset(

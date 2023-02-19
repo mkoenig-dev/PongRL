@@ -407,7 +407,6 @@ class SimpleAI(Agent):
         return np.array([hrange[self.target], 0.5 * vrange.sum()])
 
     def select_action(self, state: ArrayLike) -> Action:
-
         state_t = self.env.denormalize(state)
 
         # Calculate player's target position
@@ -555,11 +554,11 @@ class DDPG(Agent):
         Returns:
             float: loss value of the minibatch prediction of the critique.
         """
-        states = np.array(batch.state, dtype="float32")
-        actions = np.array(batch.action, dtype="float32")[..., np.newaxis]
-        next_states = np.array(batch.next_state, dtype="float32")
-        rewards = np.array(batch.reward, dtype="float32")
-        terminals = np.array(batch.done, dtype="float32")
+        states = np.asarray(batch.state, dtype="float32")
+        actions = np.asarray(batch.action, dtype="float32")[..., np.newaxis]
+        next_states = np.asarray(batch.next_state, dtype="float32")
+        rewards = np.asarray(batch.reward, dtype="float32")
+        terminals = np.asarray(batch.done, dtype="float32")
 
         next_action = self.t_actor(next_states)
         next_q = self.t_critique([next_states, next_action])

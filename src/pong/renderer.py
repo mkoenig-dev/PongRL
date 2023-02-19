@@ -30,7 +30,7 @@ class Renderer:
 
         self.font = pygame.font.SysFont(None, 72)
 
-        pygame.display.set_caption("Pong by Kinguuu")
+        pygame.display.set_caption("PongRL")
 
         self.game_over = False
         self.env = env
@@ -50,6 +50,7 @@ class Renderer:
         y = upscale * p.pos_y
         w = upscale * p.width
         h = upscale * p.height
+
         pygame.draw.rect(self.screen, white, [x, y, w, h])
 
     def draw_ball(self, ball: Ball, upscale: float = 1.0) -> None:
