@@ -6,6 +6,8 @@ from pong.agent import UserAgent
 
 from .environment import Action, Ball, Environment, Field, Player
 
+import numpy as np
+
 white = (255, 255, 255)
 gray = (128, 128, 128)
 black = (0, 0, 0)
@@ -38,6 +40,11 @@ class Renderer:
         self.m2p = self.screen_width / (env.field.width - env.field.origin[0])
 
         self.clock = pygame.time.Clock()
+
+        self.history = []
+
+        for _ in range(2):
+            self.render()
 
     def draw_player(self, p: Player, upscale: float = 1.0) -> None:
         """Draw a player to the screen.
@@ -90,8 +97,7 @@ class Renderer:
         img = self.font.render(f"{score[0]} : {score[1]}", True, gray, black)
         x_pos = (
             self.env.field.origin[0]
-            + (self.env.field.width - 0.25 * img.get_bounding_rect().width)
-            * 0.5
+            + 0.5 * (self.env.field.width - img.get_bounding_rect().width)
             * upscale
         )
         y_pos = self.env.field.height * upscale * 0.05
@@ -110,7 +116,20 @@ class Renderer:
         self.draw_ball(self.env.ball, upscale=self.m2p)
 
         pygame.display.update()
+
+        rgb = pygame.surfarray.array3d(self.screen)
+        r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+        gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+
+        self.history.append(gray)
+
+        if len(self.history) > 6:
+            self.history.pop(0)
+
         self.clock.tick(framerate)
+
+    def observe(self):
+        return np.stack(self.history[-2:], axis=-1)
 
     def events(self, user_control: bool = False) -> Optional[Action]:
         """Event handling for user interactions.

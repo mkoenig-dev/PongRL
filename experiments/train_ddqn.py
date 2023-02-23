@@ -1,3 +1,4 @@
+from operator import attrgetter
 from typing import Any
 
 import numpy as np
@@ -6,28 +7,29 @@ from numpy.typing import ArrayLike
 from tensorflow.keras.models import Model
 from tqdm import trange
 
-from pong.agent import DDPG, ReplayBuffer, SimpleAI
+from pong.agent import DDQN, ReplayBuffer, SimpleAI, epsilon_decay
 from pong.environment import (ACTION_SPACE, Batch, Environment, Field,
                               Transition)
 from pong.renderer import Renderer
 
 
-class DDPGModel(Model):
+class DQN(Model):
     def __init__(self, shape: ArrayLike) -> None:
         super().__init__()
         self.input_layer = tf.keras.layers.InputLayer(shape)
-        self.layer_stack = [
-            tf.keras.layers.Conv2D(units, activation=activation)
-            for units, activation in zip(
-                (16, 32, 16, 3, 1), ("relu", "relu", "relu", "relu", "tanh")
-            )
-        ]
+        self.conv1 = tf.keras.layers.Conv2D(16, (3, 3), activation="relu", strides=(2, 2))
+        self.conv2 = tf.keras.layers.Conv2D(32, (3, 3), activation="relu", strides=(2, 2))
+        self.pool = tf.keras.layers.MaxPool2D(strides=(2, 2))
+        self.flatten = tf.keras.layers.Flatten()
+        self.dense = tf.keras.layers.Dense(3, activation="linear")
 
     def call(self, inputs):
-        x = tf.concat(inputs, axis=1)
-        x = self.input_layer(x)
-        for layer in self.layer_stack:
-            x = layer(x)
+        x = self.input_layer(inputs)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.pool(x)
+        x = self.flatten(x)
+        x = self.dense(x)
 
         return x
 
@@ -37,35 +39,28 @@ def repack_batch(batch: Any, batch_size: int) -> Batch:
     # target = 1: player 2
 
     # values of action enum items go from -1 to 1, hence +1 for the index
-    action_batch = np.asarray(batch.action1, dtype="float32")
+    action_indices = np.array(list(map(attrgetter("value"), batch.action1))) + 1
 
     # Gather states from batch
     state_batch = np.asarray(
         batch.state,
-    ).reshape(batch_size, -1)
+    )
 
-    new_state_batch = np.asarray(batch.new_state).reshape(batch_size, -1)
+    new_state_batch = np.asarray(batch.new_state)
 
     reward_batch = batch.reward1
     reward_batch = np.asarray(reward_batch, dtype="float32")
     terminal_batch = np.asarray(batch.terminal, dtype="float32")
 
     return Batch(
-        state_batch, action_batch, new_state_batch, reward_batch, terminal_batch
+        state_batch, action_indices, new_state_batch, reward_batch, terminal_batch
     )
 
 
-def train_ddpg(episodes, batch_size, gamma, tau, num_freezes, mem_size):
+def train_ddqn(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     buffer = ReplayBuffer(mem_size)
 
-    try:
-        agent = DDPG.load("models/ddpg")
-    except OSError:
-        # Define actors per player
-        actor = DDPGModel((None, 6))
-        critique = DDPGModel((None, 7))
-
-        agent = DDPG(actor, critique)
+    agent = DDQN(DQN((None, 512, 256, 2)))
 
     env = Environment(Field())
 
@@ -77,10 +72,9 @@ def train_ddpg(episodes, batch_size, gamma, tau, num_freezes, mem_size):
     # Training optimizer and loss
 
     loss = tf.keras.losses.MeanSquaredError()
-    opt1 = tf.keras.optimizers.RMSprop(1e-5)
-    opt2 = tf.keras.optimizers.RMSprop(1e-5)
+    opt = tf.keras.optimizers.RMSprop(1e-5)
 
-    agent.compile(loss=loss, opt_actor=opt1, opt_critique=opt2)
+    agent.compile(loss=loss, optimizer=opt)
 
     loss_values = []
 
@@ -92,18 +86,14 @@ def train_ddpg(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
             current_state = renderer.observe()
 
-            action1 = agent.select_action(current_state[np.newaxis], noise=1.0)
-            action2 = ai_agent.select_action(current_state)
+            ai_state = env.observe()
 
-            nearest_action_index = np.argmin(
-                [abs(action.value - action1) for action in ACTION_SPACE], axis=0
-            )
+            eps = epsilon_decay(e, int(0.8 * episodes), 0.2, 0.8, warm_up=e < 2000)
 
-            nearest_action = ACTION_SPACE[np.squeeze(nearest_action_index)]
+            action1 = agent.select_action(current_state[np.newaxis], eps=eps)
+            action2 = ai_agent.select_action(ai_state)
 
-            _, _, _, _, reward1, reward2, terminal = env.step(
-                nearest_action, action2
-            )
+            _, _, _, _, reward1, reward2, terminal = env.step(action1, action2)
 
             # Render current scene
             renderer.render()
@@ -129,11 +119,11 @@ def train_ddpg(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 
                 # Update target Q network and save models every num_freezes epochs
                 if e % num_freezes == 0:
-                    agent.update_targets(tau)
+                    agent.update_target(tau)
 
                 # Save networks
                 if e % 5000 == 0 and e > 0:
-                    agent.save("models/ddpg_2")
+                    agent.save("models/ddqn")
 
                 if len(loss_values) > 500:
                     loss_values.clear()
@@ -144,9 +134,9 @@ def train_ddpg(episodes, batch_size, gamma, tau, num_freezes, mem_size):
 if __name__ == "__main__":
     EPISODES = 2000000
     MEM_SIZE = 100000
-    BATCH_SIZE = 512
+    BATCH_SIZE = 32
     NUM_FREEZES = 1
     GAMMA = 0.99
     TAU = 0.998
 
-    train_ddpg(EPISODES, BATCH_SIZE, GAMMA, TAU, NUM_FREEZES, MEM_SIZE)
+    train_ddqn(EPISODES, BATCH_SIZE, GAMMA, TAU, NUM_FREEZES, MEM_SIZE)

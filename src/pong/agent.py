@@ -240,7 +240,7 @@ class DDQN(Agent):
 
         return loss_value
 
-    def select_action(self, state: ArrayLike, eps: Optional[float] = None) -> Action:
+    def select_action(self, state: ArrayLike, eps: Optional[float] = None) -> int:
         """Select action based on epsilon-greedy policy.
 
         Args:

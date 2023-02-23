@@ -38,7 +38,7 @@ while not renderer.game_over:
     # Transform state tuple to input tensor
     current_state = env.observe()
 
-    action1 = ai_agent1.select_action(current_state[np.newaxis])[0][0]
+    action1 = ai_agent1.select_action(current_state[np.newaxis]).value
     nearest_action_index = np.argmin(
         [abs(action.value - action1) for action in ACTION_SPACE], axis=0
     )
